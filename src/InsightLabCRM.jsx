@@ -11,6 +11,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import NocturneBackground from "./components/NocturneBackground";
 import { ThemeProvider, ThemeToggle, useTheme } from "./components/theme";
 import BrandMark from "./components/Logo";
+import { BarChart3, Mic, Calendar, TrendingUp, Users, Settings, LayoutDashboard } from "lucide-react";
 import "./nocturne.css";
 
 // ============================================================================
@@ -621,7 +622,7 @@ function Header({ user, users, onSwitchUser, nav, current, onNav }) {
             padding: "9px 14px", borderRadius: 999, cursor: "pointer", fontFamily: FONT,
             whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 6, transition: "all .18s",
           }}>
-            <span>{n.icon}</span>{n.label}
+            <span style={{ display: "inline-flex", alignItems: "center" }}>{n.icon}</span>{n.label}
           </button>
         ))}
       </nav>
@@ -1856,24 +1857,25 @@ function CRMApp({ onSignOut }) {
   const upd = (key, id, fn) => setDb((d) => ({ ...d, [key]: d[key].map((x) => (x.id === id ? fn(x) : x)) }));
 
   // ---------- навигация по ролям ----------
+  const ic = { size: 17, strokeWidth: 1.9 };
   const NAV = {
     admin: [
-      { id: "sales", label: "Продажи", icon: "📊" },
-      { id: "recruit", label: "Рекрутинг", icon: "🎙" },
-      { id: "calendar", label: "Календарь", icon: "🗓" },
-      { id: "analytics", label: "Аналитика", icon: "📈" },
-      { id: "users", label: "Пользователи", icon: "👤" },
-      { id: "settings", label: "Настройки", icon: "⚙️" },
+      { id: "sales", label: "Продажи", icon: <BarChart3 {...ic} /> },
+      { id: "recruit", label: "Рекрутинг", icon: <Mic {...ic} /> },
+      { id: "calendar", label: "Календарь", icon: <Calendar {...ic} /> },
+      { id: "analytics", label: "Аналитика", icon: <TrendingUp {...ic} /> },
+      { id: "users", label: "Пользователи", icon: <Users {...ic} /> },
+      { id: "settings", label: "Настройки", icon: <Settings {...ic} /> },
     ],
     sales: [
-      { id: "sales", label: "Продажи", icon: "📊" },
-      { id: "calendar", label: "Календарь", icon: "🗓" },
-      { id: "analytics", label: "Аналитика", icon: "📈" },
+      { id: "sales", label: "Продажи", icon: <BarChart3 {...ic} /> },
+      { id: "calendar", label: "Календарь", icon: <Calendar {...ic} /> },
+      { id: "analytics", label: "Аналитика", icon: <TrendingUp {...ic} /> },
     ],
     interviewer: [
-      { id: "workspace", label: "Рабочее пространство", icon: "🎙" },
-      { id: "calendar", label: "Календарь", icon: "🗓" },
-      { id: "analytics", label: "Аналитика", icon: "📈" },
+      { id: "workspace", label: "Рабочее пространство", icon: <LayoutDashboard {...ic} /> },
+      { id: "calendar", label: "Календарь", icon: <Calendar {...ic} /> },
+      { id: "analytics", label: "Аналитика", icon: <TrendingUp {...ic} /> },
     ],
   };
   const nav = NAV[role];
