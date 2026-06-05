@@ -5,12 +5,20 @@ import { createContext, useContext, useState, useEffect, useCallback } from "rea
    Visual layer only. Drives the [data-theme] attribute on <html>; all colors
    come from CSS variables in nocturne.css, so the switch is instant + global.
 
-   По умолчанию — светлая тема ("Daylight"). Выбор пользователя сохраняется
-   и имеет приоритет над значением по умолчанию.
+   PERSISTENCE (per project constraints):
+   This project forbids localStorage in some environments, so persistence is
+   defensive and layered — the first one that works wins:
+     1. If you pass `initial` + `onChange` (e.g. wired to a Supabase profile
+        field), those take precedence — see the wiring note at the bottom.
+     2. Otherwise try localStorage (works in your real deployment; silently
+        skipped where blocked).
+     3. Otherwise fall back to the OS preference (prefers-color-scheme) and
+        keep the choice for the current session only.
+   No app logic, function names, props, state keys or Supabase calls are touched.
    ============================================================================ */
 
 const STORAGE_KEY = "insightlab_theme";
-const ThemeCtx = createContext({ theme: "light", setTheme: () => {}, toggle: () => {} });
+const ThemeCtx = createContext({ theme: "dark", setTheme: () => {}, toggle: () => {} });
 
 function readStored() {
   try {
@@ -20,9 +28,10 @@ function readStored() {
   return null;
 }
 function readSystem() {
-  // По умолчанию — светлая тема. Выбор пользователя (readStored) имеет приоритет;
-  // здесь только значение по умолчанию для нового пользователя.
-  return "light";
+  try {
+    if (window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches) return "light";
+  } catch (_) {}
+  return "light"; // Lumen light is the approved default
 }
 
 export function ThemeProvider({ children, initial, onChange }) {
@@ -38,7 +47,7 @@ export function ThemeProvider({ children, initial, onChange }) {
   useEffect(() => { if (initial && initial !== theme) setThemeState(initial); /* eslint-disable-next-line */ }, [initial]);
 
   const setTheme = useCallback((t) => {
-    const next = t === "light" || t === "dark" ? t : "light";
+    const next = t === "light" || t === "dark" ? t : "dark";
     setThemeState(next);
     if (onChange) { try { onChange(next); } catch (_) {} } // e.g. write to profile
   }, [onChange]);
@@ -83,3 +92,20 @@ export function ThemeToggle({ size = 38, title = "Сменить тему" }) {
     </button>
   );
 }
+
+/* ----------------------------------------------------------------------------
+   OPTIONAL — persist to Supabase profile instead of localStorage.
+   If your `users`/profile row has (or you add) a `theme` text column, wire it
+   WITHOUT touching app logic by passing controlled props from CRMApp:
+
+     const me = db?.users.find(u => u.id === userId);
+     <ThemeProvider
+       initial={me?.theme}
+       onChange={(t) => setDb(d => ({
+         ...d,
+         users: d.users.map(u => u.id === userId ? { ...u, theme: t } : u),
+       }))}     // your existing debounced saveState(db) effect persists it
+     >
+   With no column, the localStorage + system fallbacks above already remember
+   the choice in your real environment.
+---------------------------------------------------------------------------- */

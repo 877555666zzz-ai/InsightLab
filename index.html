@@ -5,13 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>InsightLab CRM</title>
     <!-- Pre-paint theme: set <html data-theme> before React mounts to avoid a flash.
-         Defensive: localStorage (if allowed) -> light by default. -->
+         Defensive: localStorage (if allowed) -> system preference -> light. -->
     <script>
       (function () {
         try {
           var t = window.localStorage.getItem("insightlab_theme");
           if (t !== "light" && t !== "dark") {
-            t = "light";
+            t = (window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches) ? "dark" : "light";
           }
           document.documentElement.setAttribute("data-theme", t);
         } catch (e) {

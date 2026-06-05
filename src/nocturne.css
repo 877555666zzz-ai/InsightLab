@@ -32,17 +32,36 @@
   --c-green:#3FB97F;
   --c-red:#E5586E;
   --c-amber:#E0A93B;
+  --c-indigo:#8B8BFF;                       /* Lumen indigo accent (dark) */
+  --c-pill-bg:#F4F5FA;                       /* primary pill = near-white on dark */
+  --c-pill-ink:#0A0A0B;
   --c-glow:rgba(45,156,219,0.45);
   --c-shadow:0 1px 2px rgba(0,0,0,0.30), 0 4px 14px -6px rgba(0,0,0,0.50);
   --c-shadow-md:0 12px 34px -12px rgba(0,0,0,0.62), 0 2px 8px rgba(0,0,0,0.35);
   --c-shadow-lg:0 30px 80px -24px rgba(0,0,0,0.72);
   --c-card-sheen:linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0) 42%);
   --c-ring:rgba(45,156,219,0.18);          /* focus ring wash */
-  /* glass */
+  /* nav/header glass (denser, for sticky bars) */
   --c-glass:rgba(18,26,40,0.72);
   --c-glass-border:rgba(255,255,255,0.08);
   --c-glass-blur:18px;
   --c-on-accent:#04101c;                   /* text on blue/green buttons */
+  /* ---- TRUE GLASS (transparent cards on colored blobs) ---- */
+  --g-card:rgba(255,255,255,0.06);         /* card fill — very transparent */
+  --g-strong:rgba(20,28,44,0.55);          /* denser pad under dense text */
+  --g-border:rgba(255,255,255,0.16);       /* bright glass rim */
+  --g-highlight:inset 0 1px 0 rgba(255,255,255,0.12);
+  --g-blur:28px;
+  --g-shadow:0 8px 32px rgba(0,0,0,0.45);
+  --g-shadow-hi:0 16px 44px rgba(0,0,0,0.58);
+  --g-col:rgba(255,255,255,0.03);          /* kanban column tint */
+  --g-col-over:rgba(45,156,219,0.12);      /* column drop-hover */
+  /* colored blobs visible through the glass */
+  --c-blobs:
+    radial-gradient(48% 44% at 12% 16%, rgba(91,91,255,0.22), transparent 70%),
+    radial-gradient(44% 40% at 88% 26%, rgba(45,156,219,0.18), transparent 70%),
+    radial-gradient(54% 50% at 72% 94%, rgba(167,139,250,0.18), transparent 72%),
+    radial-gradient(40% 38% at 26% 88%, rgba(91,91,255,0.12), transparent 70%);
   --c-overlay:rgba(6,10,18,0.62);          /* modal backdrop */
   --c-hint-bg:rgba(224,169,59,0.10);       /* interviewer hint box */
   --c-hint-bd:rgba(224,169,59,0.28);
@@ -52,8 +71,8 @@
 /* ---------- LIGHT (Daylight) — original brand palette ---------- */
 [data-theme="light"]{
   color-scheme: light;
-  --c-bg:#EEF2F8;
-  --c-bg-grad: linear-gradient(160deg, #F5F8FC 0%, #EDF1F8 46%, #E7EDF6 100%);
+  --c-bg:#E9ECF4;
+  --c-bg-grad: linear-gradient(157deg, #EEF0F6 0%, #E7E9F2 50%, #E2E5F0 100%);
   --c-text:#1C2433;
   --c-muted:#65728A;
   --c-faint:#94A1B4;
@@ -68,17 +87,36 @@
   --c-green:#27AE60;
   --c-red:#EB5757;
   --c-amber:#F2994A;
+  --c-indigo:#5B5BFF;                       /* Lumen indigo accent (light) */
+  --c-pill-bg:#0A0A0B;                       /* primary pill = black on light */
+  --c-pill-ink:#FFFFFF;
   --c-glow:rgba(45,156,219,0.30);
   --c-shadow:0 1px 2px rgba(28,46,82,0.05), 0 4px 14px -6px rgba(28,46,82,0.10);
   --c-shadow-md:0 14px 34px -14px rgba(28,46,82,0.18), 0 4px 12px -6px rgba(28,46,82,0.08);
   --c-shadow-lg:0 30px 70px -26px rgba(28,46,82,0.28);
   --c-card-sheen:linear-gradient(180deg, rgba(255,255,255,0.9), rgba(255,255,255,0) 40%);
   --c-ring:rgba(45,156,219,0.16);
-  /* glass */
+  /* nav/header glass (denser, for sticky bars) */
   --c-glass:rgba(255,255,255,0.72);
   --c-glass-border:rgba(45,80,120,0.10);
   --c-glass-blur:14px;
   --c-on-accent:#FFFFFF;
+  /* ---- TRUE GLASS (transparent cards on colored blobs) ---- */
+  --g-card:rgba(255,255,255,0.16);         /* card fill — see-through */
+  --g-strong:rgba(255,255,255,0.42);       /* denser pad under dense text */
+  --g-border:rgba(255,255,255,0.6);        /* bright glass rim */
+  --g-highlight:inset 0 1px 0 rgba(255,255,255,0.5);
+  --g-blur:28px;
+  --g-shadow:0 8px 32px rgba(30,30,60,0.12);
+  --g-shadow-hi:0 16px 44px rgba(30,30,60,0.18);
+  --g-col:rgba(255,255,255,0.10);          /* kanban column tint */
+  --g-col-over:rgba(91,91,255,0.10);       /* column drop-hover */
+  /* colored blobs visible through the glass */
+  --c-blobs:
+    radial-gradient(48% 44% at 12% 16%, rgba(91,91,255,0.16), transparent 70%),
+    radial-gradient(44% 40% at 88% 26%, rgba(45,156,219,0.14), transparent 70%),
+    radial-gradient(54% 50% at 72% 94%, rgba(167,139,250,0.15), transparent 72%),
+    radial-gradient(40% 38% at 26% 88%, rgba(91,91,255,0.10), transparent 70%);
   --c-overlay:rgba(45,45,45,0.42);
   --c-hint-bg:#FFF6E9;
   --c-hint-bd:#F4D9AE;
@@ -98,8 +136,38 @@
 html{scroll-behavior:smooth;}
 body{
   margin:0; font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-  color:var(--c-text); background:var(--c-bg-grad); background-attachment:fixed;
+  color:var(--c-text);
+  /* colored blobs painted over the base gradient — they refract through glass */
+  background:var(--c-blobs), var(--c-bg-grad);
+  background-attachment:fixed;
   -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+}
+
+/* ============================================================================
+   TRUE GLASS card — transparent, strong backdrop blur, bright rim + top sheen.
+   Use for kanban cards & big panels (analytics / calendar / users / settings).
+   Text stays near-solid for legibility; .glass-strong adds a denser sub-layer
+   under heavy text blocks if a card sits over a very busy blob area.
+   ============================================================================ */
+.glass-card{
+  position:relative;
+  background:var(--g-card);
+  backdrop-filter:blur(var(--g-blur)) saturate(140%);
+  -webkit-backdrop-filter:blur(var(--g-blur)) saturate(140%);
+  border:1px solid var(--g-border);
+  border-radius:var(--r-card);
+  box-shadow:var(--g-shadow), var(--g-highlight);
+  transition:transform .18s cubic-bezier(.22,.61,.36,1), box-shadow .22s, border-color .22s;
+}
+.glass-card:hover{
+  transform:translateY(-2px);
+  box-shadow:var(--g-shadow-hi), var(--g-highlight);
+  border-color:var(--g-border);
+}
+.glass-strong{ background:var(--g-strong); }
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
+  /* graceful fallback where blur is unsupported — keep cards readable */
+  .glass-card{ background:var(--c-surface); }
 }
 
 /* smooth, app-wide theme cross-fade — cheap props only (color/bg/border).

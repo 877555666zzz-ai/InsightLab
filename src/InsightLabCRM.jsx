@@ -53,6 +53,10 @@ const C = {
   rCard: "var(--r-card)",
   rTile: "var(--r-tile)",
   rCtl: "var(--r-ctl)",
+  rPill: "var(--r-pill)",
+  indigo: "var(--c-indigo)",
+  pill: "var(--c-pill-bg)",
+  pillInk: "var(--c-pill-ink)",
 };
 
 const FONT =
@@ -257,8 +261,8 @@ function Btn({ children, variant = "primary", size = "md", style, ...p }) {
     lg: { padding: "12px 22px", fontSize: 15 },
   };
   const variants = {
-    primary: { background: C.blue, color: "#fff", border: "1px solid " + C.blue },
-    ghost: { background: "transparent", color: C.text, border: "1px solid " + C.border },
+    primary: { background: C.pill, color: C.pillInk, border: "1px solid transparent" },
+    ghost: { background: C.surface, color: C.text, border: "1px solid " + C.borderStrong },
     soft: { background: C.blueLight, color: C.blueDark, border: "1px solid " + C.blueLight },
     danger: { background: C.surface, color: C.red, border: "1px solid #F3C2C2" },
     plain: { background: "transparent", color: C.muted, border: "1px solid transparent" },
@@ -268,13 +272,13 @@ function Btn({ children, variant = "primary", size = "md", style, ...p }) {
       {...p}
       style={{
         ...sizes[size], ...variants[variant],
-        borderRadius: 12, fontWeight: 600, cursor: "pointer",
+        borderRadius: C.rPill, fontWeight: 600, cursor: "pointer",
         fontFamily: FONT, transition: "all .18s cubic-bezier(.22,.61,.36,1)", whiteSpace: "nowrap",
         display: "inline-flex", alignItems: "center", gap: 7,
-        ...(variant === "primary" ? { boxShadow: "0 8px 22px -10px " + C.glow } : null), ...style,
+        ...(variant === "primary" ? { boxShadow: "0 8px 22px -10px rgba(20,20,40,0.45)" } : null), ...style,
       }}
-      onMouseEnter={(e) => { if (variant === "primary") e.currentTarget.style.background = C.blueDark; }}
-      onMouseLeave={(e) => { if (variant === "primary") e.currentTarget.style.background = C.blue; }}
+      onMouseEnter={(e) => { e.currentTarget.style.transform = "translateY(-1px)"; if (variant === "primary" || variant === "ghost") e.currentTarget.style.boxShadow = C.shadowMd; }}
+      onMouseLeave={(e) => { e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = variant === "primary" ? "0 8px 22px -10px rgba(20,20,40,0.45)" : "none"; }}
     >
       {children}
     </button>
@@ -302,7 +306,7 @@ function Field({ label, children, hint }) {
 }
 
 const inputStyle = {
-  width: "100%", padding: "11px 13px", borderRadius: 12,
+  width: "100%", padding: "11px 14px", borderRadius: 14,
   border: "1px solid " + C.borderStrong, fontSize: 14, fontFamily: FONT,
   color: C.text, outline: "none", boxSizing: "border-box", background: C.panel,
   transition: "border-color .18s, box-shadow .18s",
@@ -363,10 +367,7 @@ function Modal({ open, onClose, title, children, width = 560, footer }) {
 
 function Panel({ children, style, pad = 20 }) {
   return (
-    <div style={{
-      background: C.surface, backgroundImage: C.sheen, border: "1px solid " + C.border, borderRadius: C.rCard,
-      boxShadow: C.shadow, padding: pad, ...style,
-    }}>{children}</div>
+    <div className="glass-card" style={{ padding: pad, ...style }}>{children}</div>
   );
 }
 
@@ -649,19 +650,22 @@ function Header({ user, users, onSwitchUser, nav, current, onNav }) {
 
 // ---------- Канбан (drag-and-drop) ----------
 function KanbanCard({ children, onDragStart, onClick, accent }) {
+  const ac = accent || C.blue;
   return (
     <div
       draggable
       onDragStart={onDragStart}
       onClick={onClick}
       style={{
-        background: C.surface, backgroundImage: C.sheen, border: "1px solid " + C.border,
-        boxShadow: "inset 3px 0 0 " + (accent || C.blue) + ", " + C.shadow,
+        background: "var(--g-card)",
+        backdropFilter: "blur(var(--g-blur)) saturate(140%)", WebkitBackdropFilter: "blur(var(--g-blur)) saturate(140%)",
+        border: "1px solid var(--g-border)",
+        boxShadow: "inset 3px 0 0 " + ac + ", var(--g-highlight), var(--g-shadow)",
         borderRadius: 16, padding: 14, marginBottom: 12, cursor: "grab",
         transition: "transform .2s cubic-bezier(.22,.61,.36,1), box-shadow .2s, border-color .2s",
       }}
-      onMouseEnter={(e) => { e.currentTarget.style.boxShadow = "inset 3px 0 0 " + (accent || C.blue) + ", " + C.shadowMd; e.currentTarget.style.transform = "translateY(-3px)"; }}
-      onMouseLeave={(e) => { e.currentTarget.style.boxShadow = "inset 3px 0 0 " + (accent || C.blue) + ", " + C.shadow; e.currentTarget.style.transform = "none"; }}
+      onMouseEnter={(e) => { e.currentTarget.style.boxShadow = "inset 3px 0 0 " + ac + ", var(--g-highlight), var(--g-shadow-hi)"; e.currentTarget.style.transform = "translateY(-3px)"; }}
+      onMouseLeave={(e) => { e.currentTarget.style.boxShadow = "inset 3px 0 0 " + ac + ", var(--g-highlight), var(--g-shadow)"; e.currentTarget.style.transform = "none"; }}
     >{children}</div>
   );
 }
@@ -674,7 +678,6 @@ function KanbanScroller({ children }) {
   const dir = useRef(0);
   const [canL, setCanL] = useState(false);
   const [canR, setCanR] = useState(false);
-
   const refresh = () => {
     const el = ref.current; if (!el) return;
     setCanL(el.scrollLeft > 4);
@@ -687,7 +690,6 @@ function KanbanScroller({ children }) {
     window.addEventListener("drop", onUp);
     return () => { window.removeEventListener("dragend", onUp); window.removeEventListener("drop", onUp); if (raf.current) cancelAnimationFrame(raf.current); };
   }, []);
-
   const loop = () => {
     const el = ref.current;
     if (el && dir.current) { el.scrollLeft += dir.current * 16; refresh(); raf.current = requestAnimationFrame(loop); }
@@ -701,7 +703,6 @@ function KanbanScroller({ children }) {
     if (dir.current && !raf.current) raf.current = requestAnimationFrame(loop);
   };
   const arrow = (d) => () => { ref.current?.scrollBy({ left: d * 320, behavior: "smooth" }); setTimeout(refresh, 350); };
-
   const arrowBtn = (d, show) => (
     <button onClick={arrow(d)} disabled={!show} style={{
       flexShrink: 0, width: 34, height: 34, alignSelf: "center", borderRadius: 999,
@@ -710,7 +711,6 @@ function KanbanScroller({ children }) {
       boxShadow: C.shadow, transition: "opacity .15s",
     }}>{d < 0 ? "‹" : "›"}</button>
   );
-
   return (
     <div style={{ display: "flex", gap: 8, alignItems: "stretch" }}>
       {arrowBtn(-1, canL)}
@@ -735,7 +735,6 @@ function KanbanBoard({ stages, items, getStage, renderCard, onMove, sideStages, 
   const selectAll = () => setSel(new Set(items.map((it) => it.id)));
   const clearSel = () => { setSel(new Set()); setMoveTo(""); };
   const exitSel = () => { setSelMode(false); clearSel(); };
-
   const bulkMove = (sid) => { if (!sid) return; sel.forEach((id) => onMove(id, sid)); clearSel(); };
   const bulkDelete = () => {
     if (!sel.size) return;
@@ -749,7 +748,6 @@ function KanbanBoard({ stages, items, getStage, renderCard, onMove, sideStages, 
     if (id) onMove(id, sid);
     setOver(null);
   };
-
   const Column = (st, isSide) => (
     <div key={st.id}
       onDragOver={(e) => { e.preventDefault(); setOver(st.id); }}
@@ -757,7 +755,8 @@ function KanbanBoard({ stages, items, getStage, renderCard, onMove, sideStages, 
       onDrop={onDrop(st.id)}
       style={{
         minWidth: 264, width: 264, flexShrink: 0,
-        background: over === st.id ? C.blueLight : C.panel,
+        background: over === st.id ? "var(--g-col-over)" : "var(--g-col)",
+        backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
         borderRadius: C.rTile, padding: 12,
         border: "1px solid " + (over === st.id ? C.blue : C.border),
         transition: "background .15s, border-color .15s",
@@ -796,10 +795,8 @@ function KanbanBoard({ stages, items, getStage, renderCard, onMove, sideStages, 
       </div>
     </div>
   );
-
   return (
     <div>
-      {/* панель массовых действий */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
         {!selMode ? (
           <Btn variant="ghost" size="sm" onClick={() => setSelMode(true)}>☑ Выбрать</Btn>
@@ -816,7 +813,6 @@ function KanbanBoard({ stages, items, getStage, renderCard, onMove, sideStages, 
           </>
         )}
       </div>
-
       <KanbanScroller>{stages.map((s) => Column(s, false))}</KanbanScroller>
       {sideStages && (
         <div style={{ marginTop: 16 }}>
@@ -1509,9 +1505,7 @@ function ImportExportModal({ kind, existing, projectId, onClose, onImport }) {
     const used = new Set();
     fields.forEach((f) => {
       const want = [f.label, f.key, ...(SYN[f.key] || [])].map(norm);
-      // 1) точное совпадение заголовка
       let hit = columns.find((c) => !used.has(c) && want.includes(norm(c)));
-      // 2) частичное вхождение (заголовок содержит синоним или наоборот)
       if (!hit) hit = columns.find((c) => !used.has(c) && want.some((w) => w && (norm(c).includes(w) || w.includes(norm(c)))));
       if (hit) { m[f.key] = hit; used.add(hit); }
     });
@@ -1810,7 +1804,7 @@ function SettingsView({ onReset }) {
 // App — состояние, persist, маршрутизация по ролям и правам (3.1–3.2)
 // ============================================================================
 
-const PAGE = { background: C.bg, minHeight: "100vh", fontFamily: FONT, color: C.text };
+const PAGE = { background: "transparent", minHeight: "100vh", fontFamily: FONT, color: C.text };
 const fontStyle = `@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
   * { box-sizing: border-box; } body { margin: 0; }
   ::-webkit-scrollbar { height: 10px; width: 10px; } ::-webkit-scrollbar-track { background: transparent; }
