@@ -11,7 +11,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import NocturneBackground from "./components/NocturneBackground";
 import { ThemeProvider, ThemeToggle, useTheme } from "./components/theme";
 import BrandMark from "./components/Logo";
-import { BarChart3, Mic, Calendar, TrendingUp, Users, Settings, LayoutDashboard } from "lucide-react";
+import { BarChart3, Mic, Calendar, TrendingUp, Users, Settings, LayoutDashboard,
+  FolderOpen, CalendarDays, Bell, Coffee, CheckCircle2, FileText, Lightbulb } from "lucide-react";
 import "./nocturne.css";
 
 // ============================================================================
@@ -385,12 +386,18 @@ function StatCard({ label, value, sub, accent }) {
 function EmptyState({ icon, title, text }) {
   return (
     <div style={{ textAlign: "center", padding: "48px 20px", color: C.faint }}>
-      <div style={{ fontSize: 34, marginBottom: 10 }}>{icon}</div>
+      <div style={{
+        width: 64, height: 64, borderRadius: 999, margin: "0 auto 14px",
+        display: "grid", placeItems: "center",
+        background: "var(--g-col, " + C.panel + ")", border: "1px solid " + C.border,
+        color: C.muted,
+      }}>{icon}</div>
       <div style={{ fontWeight: 700, color: C.muted, marginBottom: 4 }}>{title}</div>
       {text && <div style={{ fontSize: 13 }}>{text}</div>}
     </div>
   );
 }
+const ES = { size: 26, strokeWidth: 1.6 };
 
 // ============================================================================
 // SECTION: seed
@@ -1016,7 +1023,7 @@ function ScriptTab({ project, canEdit, onSaveScript }) {
       )}
 
       {preview.length === 0 ? (
-        <EmptyState icon="📝" title="Скрипт ещё не загружен" text="Вставьте текст вопросов — система разобьёт его на слайды." />
+        <EmptyState icon={<FileText {...ES} />} title="Скрипт ещё не загружен" text="Вставьте текст вопросов — система разобьёт его на слайды." />
       ) : (
         <>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
@@ -1044,7 +1051,7 @@ function ScriptTab({ project, canEdit, onSaveScript }) {
                 {canEdit
                   ? <Select value={b.type} options={Object.entries(BLOCK_TYPE_LABEL).map(([v, l]) => ({ value: v, label: l }))} onChange={(e) => retype(i, e.target.value)} style={{ marginBottom: 10, fontSize: 12 }} />
                   : <Badge style={{ marginBottom: 10 }}>{BLOCK_TYPE_LABEL[b.type]}</Badge>}
-                {b.hint && <div style={{ fontSize: 12, color: C.amber, background: C.hintBg, padding: "6px 9px", borderRadius: 7, marginBottom: 8 }}>💡 {b.hint}</div>}
+                {b.hint && <div style={{ fontSize: 12, color: C.amber, background: C.hintBg, padding: "6px 9px", borderRadius: 7, marginBottom: 8, display: "flex", gap: 6, alignItems: "flex-start" }}><Lightbulb size={13} strokeWidth={1.8} style={{ flexShrink: 0, marginTop: 1 }} /> {b.hint}</div>}
                 <ol style={{ margin: 0, paddingLeft: 18, color: C.text }}>
                   {b.questions.map((q, qi) => <li key={qi} style={{ fontSize: 13, marginBottom: 4, lineHeight: 1.45 }}>{q}</li>)}
                 </ol>
@@ -1073,7 +1080,7 @@ function RespCard(resp, onDragStart, onClick) {
         {resp.insight && <Badge color={C.green} bg="#E7F6EE">★ инсайт</Badge>}
       </div>
       <div style={{ fontSize: 12, color: C.faint, marginTop: 2 }}>{resp.phone}</div>
-      {resp.slot && <div style={{ fontSize: 11.5, color: C.blueDark, marginTop: 6 }}>🗓 {fmtDateTime(resp.slot)}</div>}
+      {resp.slot && <div style={{ fontSize: 11.5, color: C.blueDark, marginTop: 6, display: "flex", alignItems: "center", gap: 5 }}><Calendar size={12} strokeWidth={1.9} /> {fmtDateTime(resp.slot)}</div>}
     </KanbanCard>
   );
 }
@@ -1127,7 +1134,7 @@ function ProjectView({ project, users, respondents, canEditScript, canConduct,
         projResp.length
           ? <KanbanBoard stages={RECRUIT_STAGES} items={projResp} getStage={(r) => r.stage}
               renderCard={(r, ds) => RespCard(r, ds, () => onOpenResp(r))} onMove={onMoveResp} onDelete={onDeleteResp} />
-          : <EmptyState icon="👥" title="Респондентов пока нет" text="Импортируйте список во вкладке «Импорт/Экспорт»." />
+          : <EmptyState icon={<Users {...ES} />} title="Респондентов пока нет" text="Импортируйте список во вкладке «Импорт/Экспорт»." />
       )}
       {tab === "script" && <ScriptTab project={project} canEdit={canEditScript} onSaveScript={onSaveScript} />}
       {tab === "schedule" && (
@@ -1142,7 +1149,7 @@ function ProjectView({ project, users, respondents, canEditScript, canConduct,
                 <Btn size="sm" onClick={() => onOpenResp(r)}>Открыть</Btn>}
             </Panel>
           ))}
-          {!projResp.some((r) => r.slot) && <EmptyState icon="🗓" title="Слотов пока нет" />}
+          {!projResp.some((r) => r.slot) && <EmptyState icon={<CalendarDays {...ES} />} title="Слотов пока нет" />}
         </div>
       )}
     </div>
@@ -1171,7 +1178,7 @@ function InterviewerHome({ user, projects, respondents, tasks, onOpenProject, on
               <span style={{ fontWeight: 600, fontSize: 13.5 }}>{r.name}</span>
               <span style={{ fontSize: 12.5, color: C.blueDark }}>{fmtDateTime(r.slot).split(",")[1] || fmtDateTime(r.slot)}</span>
             </div>
-          )) : <EmptyState icon="☕" title="На сегодня интервью нет" />}
+          )) : <EmptyState icon={<Coffee {...ES} />} title="На сегодня интервью нет" />}
         </Panel>
         <Panel>
           <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>Ближайшие слоты</div>
@@ -1180,7 +1187,7 @@ function InterviewerHome({ user, projects, respondents, tasks, onOpenProject, on
               <span style={{ fontSize: 13.5 }}>{r.name}</span>
               <span style={{ fontSize: 12.5, color: C.faint }}>{fmtDateTime(r.slot)}</span>
             </div>
-          )) : <EmptyState icon="🗓" title="Слотов пока нет" />}
+          )) : <EmptyState icon={<CalendarDays {...ES} />} title="Слотов пока нет" />}
         </Panel>
       </div>
 
@@ -1202,7 +1209,7 @@ function InterviewerHome({ user, projects, respondents, tasks, onOpenProject, on
               </div>
             );
           })}
-          {!myProjects.length && <EmptyState icon="📁" title="Проектов пока не назначено" />}
+          {!myProjects.length && <EmptyState icon={<FolderOpen {...ES} />} title="Проектов пока не назначено" />}
         </div>
       </Panel>
 
@@ -1213,7 +1220,7 @@ function InterviewerHome({ user, projects, respondents, tasks, onOpenProject, on
             <span style={{ fontSize: 13.5 }}>{t.title}</span>
             <span style={{ fontSize: 12, color: C.faint }}>{fmtDate(t.when)}</span>
           </div>
-        )) : <EmptyState icon="✅" title="Задач нет" />}
+        )) : <EmptyState icon={<CheckCircle2 {...ES} />} title="Задач нет" />}
       </Panel>
     </div>
   );
@@ -1303,7 +1310,7 @@ function InterviewSlider({ respondent, project, initialNotes, onSaveNote, onFini
               <h1 style={{ fontSize: "clamp(26px,3vw,36px)", fontWeight: 800, color: "var(--c-text)", margin: "0 0 24px", lineHeight: 1.12, letterSpacing: -0.5 }}>{block.title}</h1>
               {block.hint && (
                 <div style={{ background: "var(--c-hint-bg)", border: "1px solid var(--c-hint-bd)", color: "var(--c-hint-tx)", padding: "13px 17px", borderRadius: 13, marginBottom: 26, fontSize: 14.5, lineHeight: 1.55, display: "flex", gap: 10 }}>
-                  <span style={{ flexShrink: 0 }}>💡</span><span>{block.hint}</span>
+                  <span style={{ flexShrink: 0, display: "inline-flex" }}><Lightbulb size={16} strokeWidth={1.8} /></span><span>{block.hint}</span>
                 </div>
               )}
               <ol style={{ margin: 0, padding: 0, listStyle: "none" }}>
@@ -1434,7 +1441,7 @@ function CalendarView({ user, tasks, respondents, leads, reminders, onToggleRemi
               <span style={{ flex: 1, fontSize: 13.5 }}>{e.title}</span>
               <span style={{ fontSize: 12, color: C.faint }}>{fmtDateTime(e.when)}</span>
             </div>
-          )) : <EmptyState icon="🗓" title="Событий нет" />}
+          )) : <EmptyState icon={<CalendarDays {...ES} />} title="Событий нет" />}
         </Panel>
 
         <Panel>
@@ -1458,7 +1465,7 @@ function CalendarView({ user, tasks, respondents, leads, reminders, onToggleRemi
               </div>
             </div>
           ))}
-          {!myReminders.length && <EmptyState icon="🔔" title="Напоминаний нет" />}
+          {!myReminders.length && <EmptyState icon={<Bell {...ES} />} title="Напоминаний нет" />}
         </Panel>
       </div>
     </div>
@@ -1578,7 +1585,7 @@ function ImportExportModal({ kind, existing, projectId, onClose, onImport }) {
 
       {result && (
         <div style={{ textAlign: "center", padding: "20px 0" }}>
-          <div style={{ fontSize: 34, marginBottom: 10 }}>✅</div>
+          <div style={{ display: "flex", justifyContent: "center", marginBottom: 10, color: C.green }}><CheckCircle2 size={40} strokeWidth={1.6} /></div>
           <div style={{ fontWeight: 800, fontSize: 18, marginBottom: 14 }}>Импорт завершён</div>
           <div style={{ display: "flex", justifyContent: "center", gap: 24 }}>
             <div><div style={{ fontSize: 24, fontWeight: 800, color: C.green }}>{result.added}</div><div style={{ fontSize: 12, color: C.faint }}>добавлено</div></div>
@@ -2124,7 +2131,7 @@ function PageHead({ title, sub, children }) {
 }
 
 function ProjectsGrid({ projects, users, respondents, onOpen }) {
-  if (!projects.length) return <EmptyState icon="📁" title="Проектов нет" text="Выиграйте лид в воронке продаж — создастся проект." />;
+  if (!projects.length) return <EmptyState icon={<FolderOpen {...ES} />} title="Проектов нет" text="Выиграйте лид в воронке продаж — создастся проект." />;
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(260px,1fr))", gap: 16 }}>
       {projects.map((p) => {
