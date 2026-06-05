@@ -1,0 +1,2195 @@
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import * as XLSX from "xlsx";
+import Papa from "papaparse";
+import {
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
+  LineChart, Line, PieChart, Pie, Cell, Legend,
+} from "recharts";
+import { loadDb, persistDb, resetDb, auth } from "./lib/api";
+import Login from "./Login";
+import { motion, AnimatePresence } from "framer-motion";
+import NocturneBackground from "./components/NocturneBackground";
+import { ThemeProvider, ThemeToggle, useTheme } from "./components/theme";
+import BrandMark from "./components/Logo";
+import "./nocturne.css";
+
+// ============================================================================
+// SECTION: core
+// ============================================================================
+// ============================================================================
+// InsightLab CRM — ядро (дизайн-система, данные, утилиты, примитивы)
+// ============================================================================
+
+// ---------- Дизайн-система (3.9) ----------
+// Дизайн-токены теперь ссылаются на CSS-переменные (см. nocturne.css).
+// Переключение [data-theme="dark"|"light"] мгновенно перекрашивает весь интерфейс.
+const C = {
+  bg: "var(--c-bg)",
+  text: "var(--c-text)",
+  blue: "var(--c-blue)",
+  blueDark: "var(--c-blue-dark)",
+  blueLight: "var(--c-blue-light)",
+  border: "var(--c-border)",
+  borderStrong: "var(--c-border-strong)",
+  muted: "var(--c-muted)",
+  faint: "var(--c-faint)",
+  surface: "var(--c-surface)",
+  panel: "var(--c-panel)",
+  green: "var(--c-green)",
+  red: "var(--c-red)",
+  amber: "var(--c-amber)",
+  shadow: "var(--c-shadow)",
+  shadowMd: "var(--c-shadow-md)",
+  shadowLg: "var(--c-shadow-lg)",
+  overlay: "var(--c-overlay)",
+  hintBg: "var(--c-hint-bg)",
+  hintBd: "var(--c-hint-bd)",
+  hintTx: "var(--c-hint-tx)",
+  glass: "var(--c-glass)",
+  glassBorder: "var(--c-glass-border)",
+  blueSoft: "var(--c-blue-soft)",
+  glow: "var(--c-glow)",
+  sheen: "var(--c-card-sheen)",
+  rCard: "var(--r-card)",
+  rTile: "var(--r-tile)",
+  rCtl: "var(--r-ctl)",
+};
+
+const FONT =
+  "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+
+// ---------- Справочники ----------
+const ROLES = {
+  admin: "Админ",
+  sales: "Менеджер по продажам",
+  interviewer: "Интервьюер",
+};
+
+const SALES_STAGES = [
+  { id: "new", title: "Новый" },
+  { id: "in_work", title: "В работе" },
+  { id: "demo_set", title: "Разбор-пари назначен" },
+  { id: "demo_done", title: "Разбор проведён" },
+  { id: "kp_sent", title: "КП отправлено" },
+  { id: "negotiation", title: "Переговоры" },
+  { id: "won", title: "Выиграно" },
+  { id: "lost", title: "Проиграно" },
+];
+
+const RECRUIT_STAGES = [
+  { id: "loaded", title: "Загружен" },
+  { id: "screening", title: "На скрининге" },
+  { id: "qualified", title: "Квалифицирован" },
+  { id: "slot", title: "Слот забронирован" },
+  { id: "done", title: "Интервью проведено" },
+  { id: "insight", title: "Инсайт зафиксирован" },
+];
+
+const RECRUIT_SIDE = [
+  { id: "no_answer", title: "Не дозвонились" },
+  { id: "refused", title: "Отказ" },
+  { id: "no_show", title: "Неявка" },
+];
+
+const SOURCES = ["LinkedIn", "Робот", "Таргет", "Реферал"];
+const PACKAGES = ["Экспресс", "Полное", "Месячное"];
+const RESP_MODES = { A: "Режим A — база клиента", B: "Режим B — собираем сами" };
+const REWARD_TYPES = ["Нет", "Купон такси", "Другое"];
+
+const PACKAGE_PRICE = { "Экспресс": 350000, "Полное": 900000, "Месячное": 1800000 };
+
+// ---------- Утилиты ----------
+const uid = (p = "id") => p + "_" + Math.random().toString(36).slice(2, 9);
+const todayISO = () => new Date().toISOString().slice(0, 10);
+const nowISO = () => new Date().toISOString();
+const fmtMoney = (n) =>
+  (n || 0).toLocaleString("ru-RU") + " ₸";
+const fmtDate = (iso) => {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (isNaN(d)) return iso;
+  return d.toLocaleDateString("ru-RU", { day: "2-digit", month: "short" });
+};
+const fmtDateTime = (iso) => {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (isNaN(d)) return iso;
+  return d.toLocaleString("ru-RU", {
+    day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit",
+  });
+};
+const normPhone = (p) => (p || "").replace(/[^\d+]/g, "").replace(/^8/, "+7");
+const daysBetween = (a, b) =>
+  Math.round((new Date(b) - new Date(a)) / 86400000);
+
+// ---------- Парсер скрипта (3.5а) ----------
+// Правила разметки:
+//   # Заголовок            -> новый блок/слайд
+//   1. / - / *  вопрос      -> вопрос блока
+//   > подсказка             -> подсказка ведущему
+function detectBlockType(title) {
+  const t = (title || "").toLowerCase();
+  if (/критери|оцен|скрининг|квалиф/.test(t)) return "criteria";
+  if (/вступл|введен|инструкц|правил|приветств|знаком/.test(t)) return "instruction";
+  return "questions";
+}
+
+function parseScript(raw) {
+  const lines = (raw || "").split(/\r?\n/);
+  const blocks = [];
+  let current = null;
+  const pushCurrent = () => { if (current) blocks.push(current); };
+
+  for (let line of lines) {
+    const t = line.trim();
+    if (!t) continue;
+    if (t.startsWith("#")) {
+      pushCurrent();
+      const title = t.replace(/^#+\s*/, "").trim();
+      current = {
+        id: uid("blk"),
+        order: blocks.length,
+        type: detectBlockType(title),
+        title: title || "Без названия",
+        hint: "",
+        questions: [],
+      };
+    } else if (t.startsWith(">")) {
+      const hint = t.replace(/^>\s*/, "").trim();
+      if (!current) {
+        current = { id: uid("blk"), order: 0, type: "instruction", title: "Подсказки", hint, questions: [] };
+      } else {
+        current.hint = current.hint ? current.hint + "\n" + hint : hint;
+      }
+    } else {
+      const q = t.replace(/^(\d+[\.\)]|[-*•])\s*/, "").trim();
+      if (!current) {
+        current = { id: uid("blk"), order: 0, type: "questions", title: "Вопросы", hint: "", questions: [] };
+      }
+      if (q) current.questions.push(q);
+    }
+  }
+  pushCurrent();
+  return blocks.map((b, i) => ({ ...b, order: i }));
+}
+
+const BLOCK_TYPE_LABEL = {
+  questions: "Вопросы",
+  instruction: "Инструкция",
+  criteria: "Критерии",
+};
+
+// ---------- Хранилище: данные из Supabase (RLS на сервере) ----------
+// Сохраняем снимок последнего загруженного/записанного состояния, чтобы
+// persistDb писал в БД только реальные изменения (диф).
+let __prevDb = null;
+const __clone = (x) => (x ? JSON.parse(JSON.stringify(x)) : x);
+
+async function loadState() {
+  const db = await loadDb();      // null, если нет активной сессии
+  __prevDb = __clone(db);
+  return db;
+}
+
+async function saveState(state) {
+  await persistDb(state, __prevDb);
+  __prevDb = __clone(state);
+}
+
+async function resetStorage() {
+  await resetDb();
+}
+
+// ---------- CSV / XLSX (3.7) ----------
+function exportRows(rows, columns, filename, format) {
+  const data = rows.map((r) => {
+    const o = {};
+    columns.forEach((c) => { o[c.label] = c.get(r); });
+    return o;
+  });
+  if (format === "xlsx") {
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Export");
+    XLSX.writeFile(wb, filename + ".xlsx");
+  } else {
+    const csv = Papa.unparse(data);
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = filename + ".csv"; a.click();
+    URL.revokeObjectURL(url);
+  }
+}
+
+function parseImportFile(file) {
+  return new Promise((resolve, reject) => {
+    const name = (file.name || "").toLowerCase();
+    if (name.endsWith(".xlsx") || name.endsWith(".xls")) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const wb = XLSX.read(e.target.result, { type: "array" });
+          const ws = wb.Sheets[wb.SheetNames[0]];
+          const rows = XLSX.utils.sheet_to_json(ws, { defval: "" });
+          resolve(rows);
+        } catch (err) { reject(err); }
+      };
+      reader.onerror = reject;
+      reader.readAsArrayBuffer(file);
+    } else {
+      Papa.parse(file, {
+        header: true, skipEmptyLines: true,
+        complete: (res) => resolve(res.data),
+        error: reject,
+      });
+    }
+  });
+}
+
+// ============================================================================
+// UI-примитивы
+// ============================================================================
+function Btn({ children, variant = "primary", size = "md", style, ...p }) {
+  const sizes = {
+    sm: { padding: "6px 12px", fontSize: 13 },
+    md: { padding: "9px 16px", fontSize: 14 },
+    lg: { padding: "12px 22px", fontSize: 15 },
+  };
+  const variants = {
+    primary: { background: C.blue, color: "#fff", border: "1px solid " + C.blue },
+    ghost: { background: "transparent", color: C.text, border: "1px solid " + C.border },
+    soft: { background: C.blueLight, color: C.blueDark, border: "1px solid " + C.blueLight },
+    danger: { background: C.surface, color: C.red, border: "1px solid #F3C2C2" },
+    plain: { background: "transparent", color: C.muted, border: "1px solid transparent" },
+  };
+  return (
+    <button
+      {...p}
+      style={{
+        ...sizes[size], ...variants[variant],
+        borderRadius: 12, fontWeight: 600, cursor: "pointer",
+        fontFamily: FONT, transition: "all .18s cubic-bezier(.22,.61,.36,1)", whiteSpace: "nowrap",
+        display: "inline-flex", alignItems: "center", gap: 7,
+        ...(variant === "primary" ? { boxShadow: "0 8px 22px -10px " + C.glow } : null), ...style,
+      }}
+      onMouseEnter={(e) => { if (variant === "primary") e.currentTarget.style.background = C.blueDark; }}
+      onMouseLeave={(e) => { if (variant === "primary") e.currentTarget.style.background = C.blue; }}
+    >
+      {children}
+    </button>
+  );
+}
+
+function Badge({ children, color = C.blue, bg = C.blueLight, style }) {
+  return (
+    <span style={{
+      display: "inline-flex", alignItems: "center", gap: 4,
+      fontSize: 11.5, fontWeight: 600, color, background: bg,
+      padding: "3px 9px", borderRadius: 20, whiteSpace: "nowrap", ...style,
+    }}>{children}</span>
+  );
+}
+
+function Field({ label, children, hint }) {
+  return (
+    <label style={{ display: "block", marginBottom: 14 }}>
+      <div style={{ fontSize: 12.5, fontWeight: 600, color: C.muted, marginBottom: 5 }}>{label}</div>
+      {children}
+      {hint && <div style={{ fontSize: 11.5, color: C.faint, marginTop: 4 }}>{hint}</div>}
+    </label>
+  );
+}
+
+const inputStyle = {
+  width: "100%", padding: "11px 13px", borderRadius: 12,
+  border: "1px solid " + C.borderStrong, fontSize: 14, fontFamily: FONT,
+  color: C.text, outline: "none", boxSizing: "border-box", background: C.panel,
+  transition: "border-color .18s, box-shadow .18s",
+};
+function Input(props) {
+  return <input {...props} style={{ ...inputStyle, ...props.style }}
+    onFocus={(e) => { e.target.style.borderColor = C.blue; e.target.style.boxShadow = "0 0 0 4px " + C.blueSoft; }}
+    onBlur={(e) => { e.target.style.borderColor = C.borderStrong; e.target.style.boxShadow = "none"; }} />;
+}
+function Textarea(props) {
+  return <textarea {...props} style={{ ...inputStyle, resize: "vertical", lineHeight: 1.5, ...props.style }}
+    onFocus={(e) => { e.target.style.borderColor = C.blue; e.target.style.boxShadow = "0 0 0 4px " + C.blueSoft; }}
+    onBlur={(e) => { e.target.style.borderColor = C.borderStrong; e.target.style.boxShadow = "none"; }} />;
+}
+function Select({ options, ...props }) {
+  return (
+    <select {...props} style={{ ...inputStyle, cursor: "pointer", ...props.style }}>
+      {options.map((o) =>
+        typeof o === "string"
+          ? <option key={o} value={o}>{o}</option>
+          : <option key={o.value} value={o.value}>{o.label}</option>
+      )}
+    </select>
+  );
+}
+
+function Modal({ open, onClose, title, children, width = 560, footer }) {
+  if (!open) return null;
+  return (
+    <div onClick={onClose} style={{
+      position: "fixed", inset: 0, background: C.overlay,
+      display: "flex", alignItems: "flex-start", justifyContent: "center",
+      zIndex: 1000, padding: "48px 16px", overflowY: "auto",
+    }}>
+      <div onClick={(e) => e.stopPropagation()} style={{
+        background: C.surface, backgroundImage: C.sheen, borderRadius: 22, width: "100%", maxWidth: width,
+        boxShadow: C.shadowLg, overflow: "hidden", border: "1px solid " + C.border,
+      }}>
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          padding: "18px 24px", borderBottom: "1px solid " + C.border,
+        }}>
+          <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: C.text }}>{title}</h3>
+          <button onClick={onClose} style={{
+            border: "none", background: "transparent", fontSize: 22, cursor: "pointer",
+            color: C.faint, lineHeight: 1,
+          }}>×</button>
+        </div>
+        <div style={{ padding: 24, maxHeight: "70vh", overflowY: "auto" }}>{children}</div>
+        {footer && <div style={{
+          padding: "16px 24px", borderTop: "1px solid " + C.border,
+          display: "flex", justifyContent: "flex-end", gap: 10, background: C.panel,
+        }}>{footer}</div>}
+      </div>
+    </div>
+  );
+}
+
+function Panel({ children, style, pad = 20 }) {
+  return (
+    <div style={{
+      background: C.surface, backgroundImage: C.sheen, border: "1px solid " + C.border, borderRadius: C.rCard,
+      boxShadow: C.shadow, padding: pad, ...style,
+    }}>{children}</div>
+  );
+}
+
+function StatCard({ label, value, sub, accent }) {
+  return (
+    <Panel pad={20} style={{ minWidth: 0 }}>
+      <div style={{ fontSize: 12.5, color: C.muted, fontWeight: 600, marginBottom: 10 }}>{label}</div>
+      <div style={{ fontSize: 30, fontWeight: 800, color: accent || C.text, lineHeight: 1, letterSpacing: -0.8, fontVariantNumeric: "tabular-nums" }}>{value}</div>
+      {sub && <div style={{ fontSize: 12, color: C.faint, marginTop: 8 }}>{sub}</div>}
+    </Panel>
+  );
+}
+
+function EmptyState({ icon, title, text }) {
+  return (
+    <div style={{ textAlign: "center", padding: "48px 20px", color: C.faint }}>
+      <div style={{ fontSize: 34, marginBottom: 10 }}>{icon}</div>
+      <div style={{ fontWeight: 700, color: C.muted, marginBottom: 4 }}>{title}</div>
+      {text && <div style={{ fontSize: 13 }}>{text}</div>}
+    </div>
+  );
+}
+
+// ============================================================================
+// SECTION: seed
+// ============================================================================
+// ============================================================================
+// Seed-данные (реалистичные, чтобы все воронки/слайдер/аналитика работали сразу)
+// ============================================================================
+
+const dShift = (days) => {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return d.toISOString();
+};
+const dShiftDate = (days) => dShift(days).slice(0, 10);
+
+const SCRIPT_TEXT = `# Вступление
+> Поприветствуйте, представьтесь, скажите что разговор займёт ~40 минут и записывается с согласия.
+- Расскажите коротко про вашу компанию и вашу роль в ней.
+- За что вы отвечаете в течение рабочего дня?
+
+# Про текущий процесс
+> Если говорят «проблем нет» — переспросить про последний конкретный случай.
+1. Как у вас сейчас устроен процесс работы с клиентами?
+2. Какими инструментами пользуетесь?
+3. Что в этом процессе раздражает больше всего?
+4. Опишите последний раз, когда что-то пошло не так.
+
+# Про потребности
+1. Если бы у вас была волшебная палочка — что бы вы изменили?
+2. Что вы уже пробовали, чтобы это решить?
+3. Сколько времени/денег это сейчас стоит?
+
+# Критерии квалификации
+> Это слайд для интервьюера — оценка после разговора.
+- Принимает ли респондент решения о покупке?
+- Есть ли у компании бюджет?
+- Актуальна ли проблема прямо сейчас?
+
+# Завершение
+> Поблагодарите, расскажите про следующий шаг и вознаграждение.
+- Кого ещё посоветуете для интервью?`;
+
+function buildSeed() {
+  const users = [
+    { id: "u_admin", name: "Айгерим (Админ)", role: "admin", telegram_id: "@aigerim_il", email: "admin@insightlab.kz", active: true },
+    { id: "u_sales1", name: "Данияр Сейтказы", role: "sales", telegram_id: "@daniyar_s", email: "daniyar@insightlab.kz", active: true },
+    { id: "u_sales2", name: "Мадина Ким", role: "sales", telegram_id: "@madina_k", email: "madina@insightlab.kz", active: true },
+    { id: "u_int1", name: "Тимур Абаев", role: "interviewer", telegram_id: "@timur_a", email: "timur@insightlab.kz", active: true },
+    { id: "u_int2", name: "Алия Жакупова", role: "interviewer", telegram_id: "@aliya_zh", email: "aliya@insightlab.kz", active: true },
+  ];
+
+  const mkActivity = (type, title, when, done, owner) => ({
+    id: uid("act"), type, title, when, done, owner,
+  });
+
+  const leads = [
+    {
+      id: uid("lead"), company: "Kaspi Bank", contact: "Ержан Тулегенов", title: "Head of Product",
+      phone: "+7 701 222 33 44", email: "erzhan@kaspi.kz", source: "LinkedIn",
+      stage: "negotiation", owner: "u_sales1", nextTouch: dShiftDate(1),
+      amount: 1800000, notes: "Интересует месячный пакет, 12 интервью.",
+      history: [
+        mkActivity("call", "Первый звонок — заинтересованы", dShift(-12), true, "u_sales1"),
+        mkActivity("demo", "Разбор-пари проведён", dShift(-6), true, "u_sales1"),
+        mkActivity("email", "Отправлено КП", dShift(-3), true, "u_sales1"),
+      ],
+    },
+    {
+      id: uid("lead"), company: "Chocofamily", contact: "Сауле Нурлан", title: "CMO",
+      phone: "+7 705 111 22 33", email: "saule@choco.kz", source: "Реферал",
+      stage: "demo_done", owner: "u_sales1", nextTouch: dShiftDate(2),
+      amount: 900000, notes: "Нужно понять отток в подписке.",
+      history: [
+        mkActivity("call", "Скрипт-звонок", dShift(-8), true, "u_sales1"),
+        mkActivity("demo", "Разбор-пари — зашло", dShift(-2), true, "u_sales1"),
+      ],
+    },
+    {
+      id: uid("lead"), company: "Halyk Bank", contact: "Бекзат Омаров", title: "CX Lead",
+      phone: "+7 707 444 55 66", email: "bekzat@halyk.kz", source: "Робот",
+      stage: "demo_set", owner: "u_sales2", nextTouch: dShiftDate(0),
+      amount: 350000, notes: "Робот пометил «горячий». Разбор завтра.",
+      history: [mkActivity("call", "Подтвердили слот разбора", dShift(-1), true, "u_sales2")],
+    },
+    {
+      id: uid("lead"), company: "Arbuz.kz", contact: "Жанна Ли", title: "Founder",
+      phone: "+7 700 999 88 77", email: "zhanna@arbuz.kz", source: "Таргет",
+      stage: "in_work", owner: "u_sales1", nextTouch: dShiftDate(3),
+      amount: 350000, notes: "Греем, попросили кейсы.",
+      history: [mkActivity("email", "Отправлены кейсы", dShift(-2), true, "u_sales1")],
+    },
+    {
+      id: uid("lead"), company: "Beeline KZ", contact: "Аскар Дюсенов", title: "Product Owner",
+      phone: "+7 708 333 22 11", email: "askar@beeline.kz", source: "LinkedIn",
+      stage: "new", owner: "u_sales2", nextTouch: dShiftDate(1),
+      amount: 900000, notes: "Входящий из формы.",
+      history: [],
+    },
+    {
+      id: uid("lead"), company: "Forte Bank", contact: "Динара Касым", title: "Research Lead",
+      phone: "+7 701 555 66 77", email: "dinara@forte.kz", source: "Реферал",
+      stage: "kp_sent", owner: "u_sales1", nextTouch: dShiftDate(2),
+      amount: 900000, notes: "Сравнивают с конкурентом.",
+      history: [mkActivity("email", "КП v2 отправлено", dShift(-1), true, "u_sales1")],
+    },
+    {
+      id: uid("lead"), company: "Magnum", contact: "Руслан Ахметов", title: "Head of Insights",
+      phone: "+7 705 777 88 99", email: "ruslan@magnum.kz", source: "Таргет",
+      stage: "lost", owner: "u_sales2", nextTouch: null,
+      amount: 350000, notes: "Ушли к ин-хаус команде.",
+      history: [mkActivity("call", "Отказ — делают сами", dShift(-5), true, "u_sales2")],
+    },
+  ];
+
+  const scriptBlocks = parseScript(SCRIPT_TEXT);
+
+  const projects = [
+    {
+      id: "proj_1", client: "Технодом", pkg: "Полное", price: PACKAGE_PRICE_LOCAL["Полное"],
+      start: dShiftDate(-10), deadline: dShiftDate(8), interviewers: ["u_int1", "u_int2"],
+      mode: "B", status: "active", planInterviews: 12,
+      script: { id: "scr_1", name: "Гайд: онлайн-покупки бытовой техники", blocks: scriptBlocks },
+    },
+    {
+      id: "proj_2", client: "Kolesa Group", pkg: "Экспресс", price: PACKAGE_PRICE_LOCAL["Экспресс"],
+      start: dShiftDate(-4), deadline: dShiftDate(4), interviewers: ["u_int1"],
+      mode: "A", status: "active", planInterviews: 5,
+      script: { id: "scr_2", name: "Экспресс-гайд: продавцы авто", blocks: parseScript(SCRIPT_TEXT) },
+    },
+    {
+      id: "proj_3", client: "Jusan Bank", pkg: "Месячное", price: PACKAGE_PRICE_LOCAL["Месячное"],
+      start: dShiftDate(-2), deadline: dShiftDate(26), interviewers: ["u_int2"],
+      mode: "B", status: "active", planInterviews: 20,
+      script: { id: "scr_3", name: "Гайд: цифровой банкинг МСБ", blocks: [] },
+    },
+  ];
+
+  const rNames = ["Айдос Б.", "Гульнара С.", "Ержан К.", "Мадина Т.", "Нурлан А.", "Сабина Ж.", "Олег П.", "Камила Р.", "Дамир Е.", "Асель М.", "Виктор Н.", "Динара О."];
+  const respondents = [];
+  const notes = {};
+  rNames.forEach((nm, i) => {
+    const proj = i < 7 ? "proj_1" : i < 10 ? "proj_2" : "proj_3";
+    const owner = proj === "proj_3" ? "u_int2" : (i % 2 ? "u_int2" : "u_int1");
+    let stage = "loaded";
+    const r = Math.random();
+    if (i < 3) stage = "done";
+    else if (i < 5) stage = "insight";
+    else if (i < 7) stage = "slot";
+    else if (i < 9) stage = "qualified";
+    else if (i < 10) stage = "screening";
+    const id = uid("resp");
+    const done = stage === "done" || stage === "insight";
+    respondents.push({
+      id, name: nm, phone: "+7 70" + (i % 8) + " " + (100 + i) + " " + (10 + i) + " " + (20 + i),
+      project: proj, screenStatus: i < 9 ? "Пройден" : "В процессе",
+      qualified: i < 9, slot: i < 9 ? dShift(i - 2) : null,
+      interviewStatus: done ? "Проведено" : (stage === "slot" ? "Забронировано" : "—"),
+      reward: i % 3 === 0 ? "Купон такси" : "Нет",
+      insight: stage === "insight",
+      keyInsight: stage === "insight" ? "Цена решает только после доверия к доставке — сначала смотрят отзывы и сроки." : "",
+      recording: done ? "https://drive.example/rec/" + id : "",
+      stage, owner, notes: "",
+    });
+    if (done) {
+      notes[id] = {};
+      scriptBlocks.forEach((b) => {
+        if (b.type === "questions") notes[id][b.id] = "Ответы респондента по блоку «" + b.title + "» (демо-заметка).";
+      });
+    }
+  });
+
+  const tasks = [
+    { id: uid("task"), type: "task", title: "Перезвонить Kaspi по КП", when: dShift(0), done: false, owner: "u_sales1", refType: "lead" },
+    { id: uid("task"), type: "demo", title: "Разбор-пари: Halyk Bank", when: dShift(0), done: false, owner: "u_sales2", refType: "lead" },
+    { id: uid("task"), type: "interview", title: "Интервью: " + respondents[5].name + " (Технодом)", when: dShift(0), done: false, owner: respondents[5].owner, refType: "respondent", refId: respondents[5].id },
+    { id: uid("task"), type: "interview", title: "Интервью: " + respondents[6].name + " (Технодом)", when: dShift(1), done: false, owner: respondents[6].owner, refType: "respondent", refId: respondents[6].id },
+    { id: uid("task"), type: "task", title: "Импортировать результаты робота (Jusan)", when: dShift(1), done: false, owner: "u_int2", refType: "project" },
+    { id: uid("task"), type: "interview", title: "Интервью: " + respondents[8].name + " (Kolesa)", when: dShift(2), done: false, owner: respondents[8].owner, refType: "respondent", refId: respondents[8].id },
+  ];
+
+  const reminders = [
+    { id: uid("rem"), to: "@timur_a", text: "Завтра в 11:00 интервью с " + respondents[6].name + " (проект Технодом).", when: dShift(1), sent: false, kind: "interview_1d" },
+    { id: uid("rem"), to: "@daniyar_s", text: "Сегодня разбор-пари не запланирован, но есть задача: перезвонить Kaspi.", when: dShift(0), sent: true, kind: "task" },
+    { id: uid("rem"), to: "@madina_k", text: "Через 1 час: разбор-пари с Halyk Bank.", when: dShift(0), sent: false, kind: "demo_1h" },
+  ];
+
+  return { users, leads, projects, respondents, notes, tasks, reminders };
+}
+
+// локальная таблица цен (дублируется, чтобы seed был самодостаточным)
+const PACKAGE_PRICE_LOCAL = { "Экспресс": 350000, "Полное": 900000, "Месячное": 1800000 };
+
+// ============================================================================
+// SECTION: compA
+// ============================================================================
+// ============================================================================
+// Компоненты A: Header, Nav, Kanban, карточки Lead/Respondent, конвертация
+// ============================================================================
+
+// ---------- Логотип ----------
+function Logo() {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 10, color: C.text }}>
+      <BrandMark height={22} />
+      <span style={{
+        fontSize: 9.5, color: C.faint, fontWeight: 700, letterSpacing: 1.6,
+        textTransform: "uppercase", padding: "2px 7px", borderRadius: 6,
+        background: C.panel, border: "1px solid " + C.border,
+      }}>CRM</span>
+    </div>
+  );
+}
+
+// ---------- Header с переключателем роли (демонстрация 3 интерфейсов) ----------
+function Header({ user, users, onSwitchUser, nav, current, onNav }) {
+  return (
+    <header style={{
+      background: C.glass, backdropFilter: "blur(18px) saturate(140%)", WebkitBackdropFilter: "blur(18px) saturate(140%)",
+      borderBottom: "1px solid " + C.glassBorder,
+      padding: "0 24px", display: "flex", alignItems: "center",
+      gap: 24, height: 64, position: "sticky", top: 0, zIndex: 50,
+    }}>
+      <Logo />
+      <nav style={{ display: "flex", gap: 3, flex: 1, overflowX: "auto" }}>
+        {nav.map((n) => (
+          <button key={n.id} onClick={() => onNav(n.id)} style={{
+            border: "none", background: current === n.id ? C.blueLight : "transparent",
+            color: current === n.id ? C.blueDark : C.muted, fontWeight: 600, fontSize: 13.5,
+            padding: "9px 14px", borderRadius: 999, cursor: "pointer", fontFamily: FONT,
+            whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 6, transition: "all .18s",
+          }}>
+            <span>{n.icon}</span>{n.label}
+          </button>
+        ))}
+      </nav>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <ThemeToggle />
+        <div style={{ textAlign: "right", lineHeight: 1.2 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{user.name}</div>
+          <div style={{ fontSize: 11, color: C.faint }}>{ROLES[user.role]}</div>
+        </div>
+        <select
+          value={user.id}
+          onChange={(e) => onSwitchUser(e.target.value)}
+          title="Переключить роль (демо)"
+          style={{
+            border: "1px solid " + C.border, borderRadius: 10, padding: "8px 10px",
+            fontFamily: FONT, fontSize: 12.5, color: C.muted, cursor: "pointer", background: C.surface,
+          }}>
+          {users.filter((u) => u.active).map((u) => (
+            <option key={u.id} value={u.id}>{ROLES[u.role]} — {u.name}</option>
+          ))}
+        </select>
+      </div>
+    </header>
+  );
+}
+
+// ---------- Канбан (drag-and-drop) ----------
+function KanbanCard({ children, onDragStart, onClick, accent }) {
+  return (
+    <div
+      draggable
+      onDragStart={onDragStart}
+      onClick={onClick}
+      style={{
+        background: C.surface, backgroundImage: C.sheen, border: "1px solid " + C.border,
+        boxShadow: "inset 3px 0 0 " + (accent || C.blue) + ", " + C.shadow,
+        borderRadius: 16, padding: 14, marginBottom: 12, cursor: "grab",
+        transition: "transform .2s cubic-bezier(.22,.61,.36,1), box-shadow .2s, border-color .2s",
+      }}
+      onMouseEnter={(e) => { e.currentTarget.style.boxShadow = "inset 3px 0 0 " + (accent || C.blue) + ", " + C.shadowMd; e.currentTarget.style.transform = "translateY(-3px)"; }}
+      onMouseLeave={(e) => { e.currentTarget.style.boxShadow = "inset 3px 0 0 " + (accent || C.blue) + ", " + C.shadow; e.currentTarget.style.transform = "none"; }}
+    >{children}</div>
+  );
+}
+
+// Горизонтальная лента колонок: стрелки по бокам + автопрокрутка при
+// перетаскивании карточки к краю.
+function KanbanScroller({ children }) {
+  const ref = useRef(null);
+  const raf = useRef(null);
+  const dir = useRef(0);
+  const [canL, setCanL] = useState(false);
+  const [canR, setCanR] = useState(false);
+
+  const refresh = () => {
+    const el = ref.current; if (!el) return;
+    setCanL(el.scrollLeft > 4);
+    setCanR(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+  };
+  useEffect(() => {
+    refresh();
+    const onUp = () => { dir.current = 0; };
+    window.addEventListener("dragend", onUp);
+    window.addEventListener("drop", onUp);
+    return () => { window.removeEventListener("dragend", onUp); window.removeEventListener("drop", onUp); if (raf.current) cancelAnimationFrame(raf.current); };
+  }, []);
+
+  const loop = () => {
+    const el = ref.current;
+    if (el && dir.current) { el.scrollLeft += dir.current * 16; refresh(); raf.current = requestAnimationFrame(loop); }
+    else { raf.current = null; }
+  };
+  const onDragOver = (e) => {
+    const el = ref.current; if (!el) return;
+    const r = el.getBoundingClientRect();
+    const x = e.clientX - r.left, edge = 90;
+    dir.current = x < edge ? -1 : x > r.width - edge ? 1 : 0;
+    if (dir.current && !raf.current) raf.current = requestAnimationFrame(loop);
+  };
+  const arrow = (d) => () => { ref.current?.scrollBy({ left: d * 320, behavior: "smooth" }); setTimeout(refresh, 350); };
+
+  const arrowBtn = (d, show) => (
+    <button onClick={arrow(d)} disabled={!show} style={{
+      flexShrink: 0, width: 34, height: 34, alignSelf: "center", borderRadius: 999,
+      border: "1px solid " + C.border, background: C.surface, color: show ? C.text : C.faint,
+      cursor: show ? "pointer" : "default", opacity: show ? 1 : 0.4, fontSize: 16, lineHeight: 1,
+      boxShadow: C.shadow, transition: "opacity .15s",
+    }}>{d < 0 ? "‹" : "›"}</button>
+  );
+
+  return (
+    <div style={{ display: "flex", gap: 8, alignItems: "stretch" }}>
+      {arrowBtn(-1, canL)}
+      <div ref={ref} onDragOver={onDragOver} onScroll={refresh}
+        style={{ display: "flex", gap: 16, overflowX: "auto", paddingBottom: 8, flex: 1, scrollBehavior: "smooth" }}>
+        {children}
+      </div>
+      {arrowBtn(1, canR)}
+    </div>
+  );
+}
+
+function KanbanBoard({ stages, items, getStage, renderCard, onMove, sideStages, onDelete }) {
+  const [over, setOver] = useState(null);
+  const [selMode, setSelMode] = useState(false);
+  const [sel, setSel] = useState(() => new Set());
+  const [moveTo, setMoveTo] = useState("");
+  const colItems = (sid) => items.filter((it) => getStage(it) === sid);
+  const allStages = [...stages, ...(sideStages || [])];
+
+  const toggle = (id) => setSel((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const selectAll = () => setSel(new Set(items.map((it) => it.id)));
+  const clearSel = () => { setSel(new Set()); setMoveTo(""); };
+  const exitSel = () => { setSelMode(false); clearSel(); };
+
+  const bulkMove = (sid) => { if (!sid) return; sel.forEach((id) => onMove(id, sid)); clearSel(); };
+  const bulkDelete = () => {
+    if (!sel.size) return;
+    if (!confirm("Удалить выбранные карточки (" + sel.size + ")? Действие необратимо.")) return;
+    onDelete && onDelete([...sel]); clearSel();
+  };
+
+  const onDrop = (sid) => (e) => {
+    e.preventDefault();
+    const id = e.dataTransfer.getData("id");
+    if (id) onMove(id, sid);
+    setOver(null);
+  };
+
+  const Column = (st, isSide) => (
+    <div key={st.id}
+      onDragOver={(e) => { e.preventDefault(); setOver(st.id); }}
+      onDragLeave={() => setOver((o) => (o === st.id ? null : o))}
+      onDrop={onDrop(st.id)}
+      style={{
+        minWidth: 264, width: 264, flexShrink: 0,
+        background: over === st.id ? C.blueLight : C.panel,
+        borderRadius: C.rTile, padding: 12,
+        border: "1px solid " + (over === st.id ? C.blue : C.border),
+        transition: "background .15s, border-color .15s",
+        opacity: isSide ? 0.96 : 1,
+      }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "4px 6px 14px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ width: 9, height: 9, borderRadius: 9, background: isSide ? C.amber : C.blue, boxShadow: "0 0 0 4px " + (isSide ? "color-mix(in srgb, " + C.amber + " 18%, transparent)" : C.blueSoft) }} />
+          <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{st.title}</span>
+        </div>
+        <span style={{ fontSize: 11.5, fontWeight: 700, color: C.muted, background: C.surface, borderRadius: 999, padding: "2px 10px", border: "1px solid " + C.border }}>
+          {colItems(st.id).length}
+        </span>
+      </div>
+      <div style={{ minHeight: 40 }}>
+        {colItems(st.id).map((it) => {
+          const card = renderCard(it, (e) => e.dataTransfer.setData("id", it.id));
+          if (!selMode) return card;
+          const isSel = sel.has(it.id);
+          return (
+            <div key={it.id} style={{ position: "relative" }}>
+              {card}
+              <div onClick={(e) => { e.stopPropagation(); toggle(it.id); }}
+                style={{ position: "absolute", inset: 0, borderRadius: 16, cursor: "pointer",
+                  background: isSel ? "color-mix(in srgb, " + C.blue + " 14%, transparent)" : "transparent",
+                  border: "2px solid " + (isSel ? C.blue : "transparent"), marginBottom: 12 }}>
+                <span style={{ position: "absolute", top: 10, right: 10, width: 22, height: 22, borderRadius: 6,
+                  border: "2px solid " + (isSel ? C.blue : C.borderStrong), background: isSel ? C.blue : C.surface,
+                  color: "#fff", display: "grid", placeItems: "center", fontSize: 14, fontWeight: 800 }}>
+                  {isSel ? "✓" : ""}
+                </span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+
+  return (
+    <div>
+      {/* панель массовых действий */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
+        {!selMode ? (
+          <Btn variant="ghost" size="sm" onClick={() => setSelMode(true)}>☑ Выбрать</Btn>
+        ) : (
+          <>
+            <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Выбрано: {sel.size}</span>
+            <Btn variant="ghost" size="sm" onClick={selectAll}>Выбрать все</Btn>
+            <Btn variant="ghost" size="sm" onClick={clearSel}>Снять</Btn>
+            <Select value={moveTo} onChange={(e) => { bulkMove(e.target.value); }}
+              options={[{ value: "", label: "Перенести в…" }, ...allStages.map((s) => ({ value: s.id, label: s.title }))]}
+              style={{ width: 200 }} disabled={!sel.size} />
+            {onDelete && <Btn variant="danger" size="sm" onClick={bulkDelete} disabled={!sel.size}>Удалить ({sel.size})</Btn>}
+            <Btn variant="plain" size="sm" onClick={exitSel}>✕ Выход</Btn>
+          </>
+        )}
+      </div>
+
+      <KanbanScroller>{stages.map((s) => Column(s, false))}</KanbanScroller>
+      {sideStages && (
+        <div style={{ marginTop: 16 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, marginBottom: 8 }}>Боковые статусы</div>
+          <KanbanScroller>{sideStages.map((s) => Column(s, true))}</KanbanScroller>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------- Карточка лида (полная, с историей) ----------
+function LeadDetail({ lead, users, canEdit, onSave, onClose, onConvert }) {
+  const [l, setL] = useState({ ...lead });
+  const [act, setAct] = useState({ type: "call", title: "" });
+  const set = (k, v) => setL((p) => ({ ...p, [k]: v }));
+  const addActivity = () => {
+    if (!act.title.trim()) return;
+    const a = { id: uid("act"), type: act.type, title: act.title, when: nowISO(), done: true, owner: l.owner };
+    setL((p) => ({ ...p, history: [...(p.history || []), a] }));
+    setAct({ type: "call", title: "" });
+  };
+  const stageTitle = SALES_STAGES.find((s) => s.id === l.stage)?.title;
+  return (
+    <Modal open onClose={onClose} width={620} title={l.company || "Новый лид"}
+      footer={canEdit && (
+        <>
+          {l.stage !== "won" && <Btn variant="ghost" onClick={() => { onSave(l); onClose(); }}>Сохранить</Btn>}
+          {l.stage === "won"
+            ? <Btn onClick={() => onConvert(l)}>Конвертировать в проект →</Btn>
+            : <Btn onClick={() => { onSave({ ...l, stage: "won" }); onConvert({ ...l, stage: "won" }); }}>Выиграно → создать проект</Btn>}
+        </>
+      )}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+        <Field label="Компания"><Input value={l.company} disabled={!canEdit} onChange={(e) => set("company", e.target.value)} /></Field>
+        <Field label="Контактное лицо"><Input value={l.contact} disabled={!canEdit} onChange={(e) => set("contact", e.target.value)} /></Field>
+        <Field label="Должность / роль"><Input value={l.title} disabled={!canEdit} onChange={(e) => set("title", e.target.value)} /></Field>
+        <Field label="Источник"><Select disabled={!canEdit} value={l.source} options={SOURCES} onChange={(e) => set("source", e.target.value)} /></Field>
+        <Field label="Телефон"><Input value={l.phone} disabled={!canEdit} onChange={(e) => set("phone", e.target.value)} /></Field>
+        <Field label="Email"><Input value={l.email} disabled={!canEdit} onChange={(e) => set("email", e.target.value)} /></Field>
+        <Field label="Стадия"><Select disabled={!canEdit} value={l.stage} options={SALES_STAGES.map((s) => ({ value: s.id, label: s.title }))} onChange={(e) => set("stage", e.target.value)} /></Field>
+        <Field label="Ответственный"><Select disabled={!canEdit} value={l.owner} options={users.filter((u) => u.role === "sales" || u.role === "admin").map((u) => ({ value: u.id, label: u.name }))} onChange={(e) => set("owner", e.target.value)} /></Field>
+        <Field label="Дата следующего касания"><Input type="date" value={l.nextTouch || ""} disabled={!canEdit} onChange={(e) => set("nextTouch", e.target.value)} /></Field>
+        <Field label="Оценочная сумма сделки, ₸"><Input type="number" value={l.amount} disabled={!canEdit} onChange={(e) => set("amount", +e.target.value)} /></Field>
+      </div>
+      <Field label="Заметки"><Textarea rows={2} value={l.notes} disabled={!canEdit} onChange={(e) => set("notes", e.target.value)} /></Field>
+
+      <div style={{ marginTop: 8 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 10 }}>История активностей</div>
+        {canEdit && (
+          <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+            <Select value={act.type} options={[
+              { value: "call", label: "Звонок" }, { value: "email", label: "Письмо" },
+              { value: "demo", label: "Разбор-пари" }, { value: "task", label: "Задача" }]}
+              onChange={(e) => setAct((p) => ({ ...p, type: e.target.value }))} style={{ width: 150 }} />
+            <Input placeholder="Что произошло…" value={act.title} onChange={(e) => setAct((p) => ({ ...p, title: e.target.value }))} />
+            <Btn onClick={addActivity}>Добавить</Btn>
+          </div>
+        )}
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {(l.history || []).slice().reverse().map((a) => (
+            <div key={a.id} style={{ display: "flex", gap: 10, alignItems: "center", padding: "8px 12px", background: C.panel, borderRadius: 9 }}>
+              <Badge>{ {call:"Звонок",email:"Письмо",demo:"Разбор",task:"Задача",interview:"Интервью"}[a.type] || a.type }</Badge>
+              <span style={{ flex: 1, fontSize: 13, color: C.text }}>{a.title}</span>
+              <span style={{ fontSize: 11.5, color: C.faint }}>{fmtDateTime(a.when)}</span>
+            </div>
+          ))}
+          {(!l.history || !l.history.length) && <div style={{ fontSize: 13, color: C.faint }}>Активностей пока нет.</div>}
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// ---------- Конвертация лида → проект (3.4) ----------
+function ConvertModal({ lead, users, onClose, onCreate }) {
+  const [p, setP] = useState({
+    client: lead.company, pkg: "Полное", mode: "B",
+    deadline: todayISO(), interviewers: [], planInterviews: 12,
+  });
+  const set = (k, v) => setP((x) => ({ ...x, [k]: v }));
+  const toggleInt = (id) => setP((x) => ({
+    ...x, interviewers: x.interviewers.includes(id) ? x.interviewers.filter((i) => i !== id) : [...x.interviewers, id],
+  }));
+  return (
+    <Modal open onClose={onClose} width={560} title={"Конвертация в проект: " + lead.company}
+      footer={<><Btn variant="ghost" onClick={onClose}>Отмена</Btn>
+        <Btn onClick={() => onCreate({ ...p, price: PACKAGE_PRICE[p.pkg] })}>Создать проект</Btn></>}>
+      <Field label="Клиент"><Input value={p.client} onChange={(e) => set("client", e.target.value)} /></Field>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+        <Field label="Тип пакета"><Select value={p.pkg} options={PACKAGES} onChange={(e) => set("pkg", e.target.value)} /></Field>
+        <Field label="Цена, ₸"><Input value={PACKAGE_PRICE[p.pkg]} disabled /></Field>
+        <Field label="Режим респондентов"><Select value={p.mode} options={[{ value: "A", label: RESP_MODES.A }, { value: "B", label: RESP_MODES.B }]} onChange={(e) => set("mode", e.target.value)} /></Field>
+        <Field label="План интервью"><Input type="number" value={p.planInterviews} onChange={(e) => set("planInterviews", +e.target.value)} /></Field>
+        <Field label="Дедлайн"><Input type="date" value={p.deadline} onChange={(e) => set("deadline", e.target.value)} /></Field>
+      </div>
+      <Field label="Назначить интервьюеров">
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+          {users.filter((u) => u.role === "interviewer").map((u) => (
+            <button key={u.id} onClick={() => toggleInt(u.id)} style={{
+              border: "1px solid " + (p.interviewers.includes(u.id) ? C.blue : C.border),
+              background: p.interviewers.includes(u.id) ? C.blueLight : C.surface,
+              color: p.interviewers.includes(u.id) ? C.blueDark : C.muted,
+              padding: "7px 13px", borderRadius: 20, cursor: "pointer", fontWeight: 600, fontSize: 13, fontFamily: FONT,
+            }}>{u.name}</button>
+          ))}
+        </div>
+      </Field>
+    </Modal>
+  );
+}
+
+// ---------- Карточка респондента (3.5) ----------
+function RespondentDetail({ resp, project, users, canEdit, onSave, onClose, onStartInterview }) {
+  const [r, setR] = useState({ ...resp });
+  const set = (k, v) => setR((p) => ({ ...p, [k]: v }));
+  return (
+    <Modal open onClose={onClose} width={580} title={r.name}
+      footer={<>
+        {canEdit && <Btn variant="ghost" onClick={() => { onSave(r); onClose(); }}>Сохранить</Btn>}
+        {canEdit && project?.script?.blocks?.length > 0 &&
+          <Btn onClick={() => onStartInterview(r)}>▶ Начать интервью</Btn>}
+      </>}>
+      {(!project?.script?.blocks?.length) && (
+        <div style={{ background: C.hintBg, border: "1px solid " + C.hintBd, color: C.amber, padding: "9px 12px", borderRadius: 9, fontSize: 12.5, marginBottom: 14 }}>
+          У проекта ещё нет скрипта — загрузите его во вкладке «Скрипт», чтобы запустить интервью.
+        </div>
+      )}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+        <Field label="Имя"><Input value={r.name} disabled={!canEdit} onChange={(e) => set("name", e.target.value)} /></Field>
+        <Field label="Телефон"><Input value={r.phone} disabled={!canEdit} onChange={(e) => set("phone", e.target.value)} /></Field>
+        <Field label="Статус скрининга"><Input value={r.screenStatus} disabled={!canEdit} onChange={(e) => set("screenStatus", e.target.value)} /></Field>
+        <Field label="Квалифицирован"><Select value={r.qualified ? "Да" : "Нет"} options={["Да", "Нет"]} disabled={!canEdit} onChange={(e) => set("qualified", e.target.value === "Да")} /></Field>
+        <Field label="Слот (дата/время)"><Input type="datetime-local" value={r.slot ? r.slot.slice(0, 16) : ""} disabled={!canEdit} onChange={(e) => set("slot", e.target.value)} /></Field>
+        <Field label="Статус интервью"><Select value={r.interviewStatus} options={["—", "Забронировано", "Проведено", "Неявка", "Отказ"]} disabled={!canEdit} onChange={(e) => set("interviewStatus", e.target.value)} /></Field>
+        <Field label="Тип вознаграждения"><Select value={r.reward} options={REWARD_TYPES} disabled={!canEdit} onChange={(e) => set("reward", e.target.value)} /></Field>
+        <Field label="Ответственный"><Select value={r.owner} options={users.filter((u) => u.role === "interviewer").map((u) => ({ value: u.id, label: u.name }))} disabled={!canEdit} onChange={(e) => set("owner", e.target.value)} /></Field>
+      </div>
+      <Field label="Ссылка на запись"><Input value={r.recording} placeholder="https://…" disabled={!canEdit} onChange={(e) => set("recording", e.target.value)} /></Field>
+      <Field label="Ключевой инсайт" hint="На этом поле строятся бонус интервьюеру и метрика insight rate">
+        <Textarea rows={2} value={r.keyInsight} disabled={!canEdit} onChange={(e) => set("keyInsight", e.target.value)} />
+      </Field>
+      <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: canEdit ? "pointer" : "default" }}>
+        <input type="checkbox" checked={r.insight} disabled={!canEdit} onChange={(e) => set("insight", e.target.checked)} />
+        <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>Флаг «инсайт»</span>
+      </label>
+      <Field label="Заметки" hint="(отдельно от заметок интервью по блокам)"><Textarea rows={2} value={r.notes} disabled={!canEdit} onChange={(e) => set("notes", e.target.value)} /></Field>
+    </Modal>
+  );
+}
+
+// ============================================================================
+// SECTION: compB
+// ============================================================================
+// ============================================================================
+// Компоненты B: ProjectView (+Скрипт), InterviewerWorkspace, InterviewSlider
+// ============================================================================
+
+// ---------- Вкладка «Скрипт» проекта (3.5а) ----------
+function ScriptTab({ project, canEdit, onSaveScript }) {
+  const [raw, setRaw] = useState("");
+  const [preview, setPreview] = useState(project.script?.blocks || []);
+  const [name, setName] = useState(project.script?.name || "");
+  const [showPaste, setShowPaste] = useState(!(project.script?.blocks?.length));
+
+  const doParse = () => {
+    const blocks = parseScript(raw);
+    if (blocks.length) { setPreview(blocks); setShowPaste(false); }
+  };
+  const move = (i, dir) => {
+    const arr = [...preview];
+    const j = i + dir;
+    if (j < 0 || j >= arr.length) return;
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+    setPreview(arr.map((b, k) => ({ ...b, order: k })));
+  };
+  const rename = (i, v) => setPreview((p) => p.map((b, k) => (k === i ? { ...b, title: v } : b)));
+  const retype = (i, v) => setPreview((p) => p.map((b, k) => (k === i ? { ...b, type: v } : b)));
+  const del = (i) => setPreview((p) => p.filter((_, k) => k !== i).map((b, k) => ({ ...b, order: k })));
+  const save = () => onSaveScript({ id: project.script?.id || uid("scr"), name: name || "Скрипт проекта", blocks: preview });
+
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+        <Field label="Название скрипта"><Input value={name} disabled={!canEdit} onChange={(e) => setName(e.target.value)} style={{ width: 360 }} /></Field>
+        {canEdit && <Btn variant="ghost" size="sm" onClick={() => setShowPaste((s) => !s)}>{showPaste ? "Скрыть ввод" : "Вставить / заменить текст"}</Btn>}
+      </div>
+
+      {showPaste && canEdit && (
+        <Panel style={{ marginBottom: 16, background: C.panel }}>
+          <div style={{ fontSize: 12.5, color: C.muted, marginBottom: 8, lineHeight: 1.5 }}>
+            Вставьте текст скрипта. Разметка:&nbsp;
+            <code style={{ background: C.surface, padding: "1px 5px", borderRadius: 4 }}># Заголовок</code> — новый слайд,&nbsp;
+            <code style={{ background: C.surface, padding: "1px 5px", borderRadius: 4 }}>1. / -</code> — вопрос,&nbsp;
+            <code style={{ background: C.surface, padding: "1px 5px", borderRadius: 4 }}>&gt; подсказка</code> — ведущему.
+          </div>
+          <Textarea rows={8} value={raw} placeholder={"# Про компанию\n1. Чем занимаетесь?\n> Если молчат — переспросить про роль"} onChange={(e) => setRaw(e.target.value)} style={{ fontFamily: "ui-monospace, monospace", fontSize: 13 }} />
+          <div style={{ marginTop: 10 }}><Btn onClick={doParse}>Разобрать на слайды →</Btn></div>
+        </Panel>
+      )}
+
+      {preview.length === 0 ? (
+        <EmptyState icon="📝" title="Скрипт ещё не загружен" text="Вставьте текст вопросов — система разобьёт его на слайды." />
+      ) : (
+        <>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Превью слайдов · {preview.length}</div>
+            {canEdit && <Btn onClick={save}>Сохранить скрипт</Btn>}
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 14 }}>
+            {preview.map((b, i) => (
+              <Panel key={b.id} pad={16} style={{ borderLeft: "3px solid " + C.blue }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                  <span style={{ fontSize: 11, fontWeight: 800, color: C.faint, letterSpacing: 1 }}>
+                    {String(i + 1).padStart(2, "0")} / {String(preview.length).padStart(2, "0")}
+                  </span>
+                  {canEdit && (
+                    <div style={{ display: "flex", gap: 4 }}>
+                      <Mini onClick={() => move(i, -1)}>↑</Mini>
+                      <Mini onClick={() => move(i, 1)}>↓</Mini>
+                      <Mini onClick={() => del(i)} danger>✕</Mini>
+                    </div>
+                  )}
+                </div>
+                {canEdit
+                  ? <Input value={b.title} onChange={(e) => rename(i, e.target.value)} style={{ fontWeight: 700, marginBottom: 8 }} />
+                  : <div style={{ fontWeight: 700, fontSize: 15, color: C.text, marginBottom: 8 }}>{b.title}</div>}
+                {canEdit
+                  ? <Select value={b.type} options={Object.entries(BLOCK_TYPE_LABEL).map(([v, l]) => ({ value: v, label: l }))} onChange={(e) => retype(i, e.target.value)} style={{ marginBottom: 10, fontSize: 12 }} />
+                  : <Badge style={{ marginBottom: 10 }}>{BLOCK_TYPE_LABEL[b.type]}</Badge>}
+                {b.hint && <div style={{ fontSize: 12, color: C.amber, background: C.hintBg, padding: "6px 9px", borderRadius: 7, marginBottom: 8 }}>💡 {b.hint}</div>}
+                <ol style={{ margin: 0, paddingLeft: 18, color: C.text }}>
+                  {b.questions.map((q, qi) => <li key={qi} style={{ fontSize: 13, marginBottom: 4, lineHeight: 1.45 }}>{q}</li>)}
+                </ol>
+              </Panel>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+function Mini({ children, onClick, danger }) {
+  return <button onClick={onClick} style={{
+    width: 24, height: 24, borderRadius: 6, border: "1px solid " + C.border,
+    background: C.surface, cursor: "pointer", color: danger ? C.red : C.muted, fontSize: 12, lineHeight: 1,
+  }}>{children}</button>;
+}
+
+// ---------- Карточка респондента в канбане рекрутинга ----------
+function RespCard(resp, onDragStart, onClick) {
+  const overdue = false;
+  return (
+    <KanbanCard key={resp.id} accent={resp.insight ? C.green : C.blue} onDragStart={onDragStart} onClick={onClick}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div style={{ fontWeight: 700, fontSize: 13.5, color: C.text }}>{resp.name}</div>
+        {resp.insight && <Badge color={C.green} bg="#E7F6EE">★ инсайт</Badge>}
+      </div>
+      <div style={{ fontSize: 12, color: C.faint, marginTop: 2 }}>{resp.phone}</div>
+      {resp.slot && <div style={{ fontSize: 11.5, color: C.blueDark, marginTop: 6 }}>🗓 {fmtDateTime(resp.slot)}</div>}
+    </KanbanCard>
+  );
+}
+
+// ---------- ProjectView (вид по одному проекту, 3.5б) ----------
+function ProjectView({ project, users, respondents, canEditScript, canConduct,
+  onMoveResp, onOpenResp, onSaveScript, onBack, onDeleteResp }) {
+  const [tab, setTab] = useState("overview");
+  const projResp = respondents.filter((r) => r.project === project.id);
+  const doneCount = projResp.filter((r) => r.stage === "done" || r.stage === "insight").length;
+  const progress = project.planInterviews ? Math.round((doneCount / project.planInterviews) * 100) : 0;
+  const ints = users.filter((u) => project.interviewers.includes(u.id)).map((u) => u.name).join(", ");
+
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+        {onBack && <Btn variant="ghost" size="sm" onClick={onBack}>← К общему виду</Btn>}
+        <div>
+          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: C.text }}>{project.client}</h2>
+          <div style={{ display: "flex", gap: 8, marginTop: 6, flexWrap: "wrap" }}>
+            <Badge>{project.pkg}</Badge>
+            <Badge color={project.mode === "A" ? C.blueDark : C.amber} bg={project.mode === "A" ? C.blueLight : "#FFF6E9"}>{RESP_MODES[project.mode]}</Badge>
+            <Badge color={C.muted} bg={C.panel}>Дедлайн {fmtDate(project.deadline)}</Badge>
+            <Badge color={C.muted} bg={C.panel}>Интервьюеры: {ints || "—"}</Badge>
+          </div>
+        </div>
+      </div>
+
+      {/* прогресс */}
+      <Panel style={{ marginBottom: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+          <span style={{ fontSize: 13, fontWeight: 700 }}>Прогресс рекрутинга</span>
+          <span style={{ fontSize: 13, fontWeight: 700, color: C.blue }}>{doneCount} / {project.planInterviews} интервью · {progress}%</span>
+        </div>
+        <div style={{ height: 9, background: C.panel, borderRadius: 20, overflow: "hidden" }}>
+          <div style={{ width: progress + "%", height: "100%", background: C.blue, borderRadius: 20, transition: "width .4s" }} />
+        </div>
+      </Panel>
+
+      <div style={{ display: "flex", gap: 4, borderBottom: "1px solid " + C.border, marginBottom: 18 }}>
+        {[["overview", "Респонденты"], ["script", "Скрипт"], ["schedule", "Расписание"]].map(([id, label]) => (
+          <button key={id} onClick={() => setTab(id)} style={{
+            border: "none", background: "transparent", fontFamily: FONT, fontSize: 14, fontWeight: 600,
+            color: tab === id ? C.blue : C.muted, padding: "10px 16px", cursor: "pointer",
+            borderBottom: "2px solid " + (tab === id ? C.blue : "transparent"), marginBottom: -1,
+          }}>{label}</button>
+        ))}
+      </div>
+
+      {tab === "overview" && (
+        projResp.length
+          ? <KanbanBoard stages={RECRUIT_STAGES} items={projResp} getStage={(r) => r.stage}
+              renderCard={(r, ds) => RespCard(r, ds, () => onOpenResp(r))} onMove={onMoveResp} onDelete={onDeleteResp} />
+          : <EmptyState icon="👥" title="Респондентов пока нет" text="Импортируйте список во вкладке «Импорт/Экспорт»." />
+      )}
+      {tab === "script" && <ScriptTab project={project} canEdit={canEditScript} onSaveScript={onSaveScript} />}
+      {tab === "schedule" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {projResp.filter((r) => r.slot).sort((a, b) => new Date(a.slot) - new Date(b.slot)).map((r) => (
+            <Panel key={r.id} pad={14} style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div>
+                <div style={{ fontWeight: 700 }}>{r.name}</div>
+                <div style={{ fontSize: 12, color: C.faint }}>{fmtDateTime(r.slot)} · {r.interviewStatus}</div>
+              </div>
+              {canConduct && project.script?.blocks?.length > 0 && r.stage !== "done" && r.stage !== "insight" &&
+                <Btn size="sm" onClick={() => onOpenResp(r)}>Открыть</Btn>}
+            </Panel>
+          ))}
+          {!projResp.some((r) => r.slot) && <EmptyState icon="🗓" title="Слотов пока нет" />}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------- Рабочее пространство интервьюера: общий вид (3.5б) ----------
+function InterviewerHome({ user, projects, respondents, tasks, onOpenProject, onOpenResp }) {
+  const myProjects = projects.filter((p) => p.interviewers.includes(user.id));
+  const myResp = respondents.filter((r) => r.owner === user.id);
+  const today = new Date().toISOString().slice(0, 10);
+  const todayInts = myResp.filter((r) => r.slot && r.slot.slice(0, 10) === today);
+  const upcoming = myResp.filter((r) => r.slot && r.slot.slice(0, 10) > today).sort((a, b) => new Date(a.slot) - new Date(b.slot)).slice(0, 5);
+  const myTasks = tasks.filter((t) => t.owner === user.id && !t.done);
+
+  return (
+    <div>
+      <h2 style={{ margin: "0 0 4px", fontSize: 22, fontWeight: 800 }}>Домашний экран</h2>
+      <p style={{ margin: "0 0 20px", color: C.muted, fontSize: 14 }}>Сводно по всем вашим проектам.</p>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+        <Panel>
+          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>Интервью сегодня · {todayInts.length}</div>
+          {todayInts.length ? todayInts.map((r) => (
+            <div key={r.id} onClick={() => onOpenResp(r)} style={{ display: "flex", justifyContent: "space-between", padding: "9px 11px", background: C.blueLight, borderRadius: 9, marginBottom: 8, cursor: "pointer" }}>
+              <span style={{ fontWeight: 600, fontSize: 13.5 }}>{r.name}</span>
+              <span style={{ fontSize: 12.5, color: C.blueDark }}>{fmtDateTime(r.slot).split(",")[1] || fmtDateTime(r.slot)}</span>
+            </div>
+          )) : <EmptyState icon="☕" title="На сегодня интервью нет" />}
+        </Panel>
+        <Panel>
+          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>Ближайшие слоты</div>
+          {upcoming.length ? upcoming.map((r) => (
+            <div key={r.id} onClick={() => onOpenResp(r)} style={{ display: "flex", justifyContent: "space-between", padding: "8px 11px", borderBottom: "1px solid " + C.border, cursor: "pointer" }}>
+              <span style={{ fontSize: 13.5 }}>{r.name}</span>
+              <span style={{ fontSize: 12.5, color: C.faint }}>{fmtDateTime(r.slot)}</span>
+            </div>
+          )) : <EmptyState icon="🗓" title="Слотов пока нет" />}
+        </Panel>
+      </div>
+
+      <Panel style={{ marginBottom: 16 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>Мои проекты</div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px,1fr))", gap: 12 }}>
+          {myProjects.map((p) => {
+            const pr = respondents.filter((r) => r.project === p.id);
+            const done = pr.filter((r) => r.stage === "done" || r.stage === "insight").length;
+            return (
+              <div key={p.id} onClick={() => onOpenProject(p.id)} style={{
+                border: "1px solid " + C.border, borderRadius: 11, padding: 14, cursor: "pointer", transition: "border-color .15s",
+              }}
+                onMouseEnter={(e) => (e.currentTarget.style.borderColor = C.blue)}
+                onMouseLeave={(e) => (e.currentTarget.style.borderColor = C.border)}>
+                <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 6 }}>{p.client}</div>
+                <Badge>{p.pkg}</Badge>
+                <div style={{ fontSize: 12, color: C.faint, marginTop: 8 }}>{done} / {p.planInterviews} интервью · до {fmtDate(p.deadline)}</div>
+              </div>
+            );
+          })}
+          {!myProjects.length && <EmptyState icon="📁" title="Проектов пока не назначено" />}
+        </div>
+      </Panel>
+
+      <Panel>
+        <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>Задачи · {myTasks.length}</div>
+        {myTasks.length ? myTasks.map((t) => (
+          <div key={t.id} style={{ display: "flex", justifyContent: "space-between", padding: "9px 0", borderBottom: "1px solid " + C.border }}>
+            <span style={{ fontSize: 13.5 }}>{t.title}</span>
+            <span style={{ fontSize: 12, color: C.faint }}>{fmtDate(t.when)}</span>
+          </div>
+        )) : <EmptyState icon="✅" title="Задач нет" />}
+      </Panel>
+    </div>
+  );
+}
+
+// ---------- Режим проведения интервью: слайдер (3.5в) ----------
+function InterviewSlider({ respondent, project, initialNotes, onSaveNote, onFinish, onClose }) {
+  const { theme } = useTheme();
+  const blocks = project.script?.blocks || [];
+  const [idx, setIdx] = useState(0);
+  const [dir, setDir] = useState(1); // visual only: slide direction
+  const [notes, setNotes] = useState(initialNotes || {});
+  const [finishing, setFinishing] = useState(false);
+  const [keyInsight, setKeyInsight] = useState(respondent.keyInsight || "");
+  const [insightFlag, setInsightFlag] = useState(respondent.insight || false);
+  const saveTimer = useRef(null);
+
+  const block = blocks[idx];
+  const go = (d) => { setDir(d); setIdx((i) => Math.max(0, Math.min(blocks.length - 1, i + d))); };
+
+  // автосохранение заметки (debounce при наборе) + сохранение при перелистывании
+  const setNote = (blockId, text) => {
+    setNotes((p) => ({ ...p, [blockId]: text }));
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => onSaveNote(respondent.id, blockId, text), 500);
+  };
+  const flush = () => {
+    if (saveTimer.current) { clearTimeout(saveTimer.current); }
+    if (block) onSaveNote(respondent.id, block.id, notes[block.id] || "");
+  };
+
+  useEffect(() => {
+    const onKey = (e) => {
+      if (finishing) return;
+      if (e.key === "ArrowRight") { flush(); go(1); }
+      if (e.key === "ArrowLeft") { flush(); go(-1); }
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
+
+  if (!blocks.length) return null;
+
+  const pct = Math.round(((idx + 1) / blocks.length) * 100);
+  const bar = { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "15px 30px" };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 2000, display: "flex", flexDirection: "column", fontFamily: FONT, color: "var(--c-text)", background: "var(--c-bg-grad)", overflow: "hidden" }}>
+      <NocturneBackground theme={theme} />
+
+      {/* верхняя панель */}
+      <div className="n-glass" style={{ ...bar, position: "relative", zIndex: 2, borderLeft: "none", borderRight: "none", borderTop: "none" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          <span style={{ fontSize: 13, fontWeight: 800, color: "var(--c-blue)", letterSpacing: 2, fontVariantNumeric: "tabular-nums" }}>
+            {String(idx + 1).padStart(2, "0")} <span style={{ color: "var(--c-faint)" }}>/ {String(blocks.length).padStart(2, "0")}</span>
+          </span>
+          <span style={{ width: 1, height: 18, background: "var(--c-border-strong)" }} />
+          <span style={{ fontSize: 15.5, fontWeight: 700, color: "var(--c-text)" }}>{block.title}</span>
+          <Badge>{BLOCK_TYPE_LABEL[block.type]}</Badge>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          <span style={{ fontSize: 12.5, color: "var(--c-muted)" }}>Респондент: <b style={{ color: "var(--c-text)" }}>{respondent.name}</b> · {project.client}</span>
+          <ThemeToggle size={34} />
+          <Btn variant="ghost" size="sm" onClick={() => { flush(); setDir(-1); setIdx(0); }}>↺ Заново</Btn>
+          <Btn variant="ghost" size="sm" onClick={() => { flush(); onClose(); }}>Свернуть</Btn>
+        </div>
+      </div>
+      {/* прогресс */}
+      <div style={{ height: 3, background: "var(--c-border)", position: "relative", zIndex: 2 }}>
+        <div style={{ width: pct + "%", height: "100%", background: "linear-gradient(90deg,var(--c-blue-dark),var(--c-blue))", boxShadow: "0 0 12px var(--c-glow)", transition: "width .45s cubic-bezier(.22,.61,.36,1)" }} />
+      </div>
+
+      {/* контент слайда */}
+      <div style={{ flex: 1, overflowY: "auto", padding: "clamp(28px,5vh,56px) 30px", display: "flex", justifyContent: "center", position: "relative", zIndex: 1 }}>
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={idx}
+            initial={{ opacity: 0, x: dir >= 0 ? 28 : -28 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: dir >= 0 ? -22 : 22 }}
+            transition={{ duration: 0.34, ease: [0.22, 0.61, 0.36, 1] }}
+            style={{ width: "100%", maxWidth: 1120, display: "grid", gridTemplateColumns: "1.05fr 0.95fr", gap: 44, alignContent: "start" }}
+          >
+            {/* левая колонка: вопросы */}
+            <div>
+              <h1 style={{ fontSize: "clamp(26px,3vw,36px)", fontWeight: 800, color: "var(--c-text)", margin: "0 0 24px", lineHeight: 1.12, letterSpacing: -0.5 }}>{block.title}</h1>
+              {block.hint && (
+                <div style={{ background: "var(--c-hint-bg)", border: "1px solid var(--c-hint-bd)", color: "var(--c-hint-tx)", padding: "13px 17px", borderRadius: 13, marginBottom: 26, fontSize: 14.5, lineHeight: 1.55, display: "flex", gap: 10 }}>
+                  <span style={{ flexShrink: 0 }}>💡</span><span>{block.hint}</span>
+                </div>
+              )}
+              <ol style={{ margin: 0, padding: 0, listStyle: "none" }}>
+                {block.questions.map((q, i) => (
+                  <li key={i} style={{ display: "flex", gap: 16, marginBottom: 18 }}>
+                    <span style={{ flexShrink: 0, width: 30, height: 30, borderRadius: 30, background: "var(--c-blue-soft)", border: "1px solid rgba(45,156,219,0.3)", color: "var(--c-blue-dark)", fontSize: 13.5, fontWeight: 800, display: "grid", placeItems: "center" }}>{i + 1}</span>
+                    <span style={{ fontSize: 19, lineHeight: 1.5, color: "var(--c-text)", textWrap: "pretty" }}>{q}</span>
+                  </li>
+                ))}
+                {!block.questions.length && <li style={{ color: "var(--c-faint)", fontSize: 16 }}>В этом блоке нет вопросов — это слайд-инструкция.</li>}
+              </ol>
+            </div>
+            {/* правая колонка: заметки */}
+            <div>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 11 }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: "var(--c-muted)" }}>Заметки по блоку</span>
+                <span style={{ fontSize: 11.5, color: "var(--c-green)", display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ width: 7, height: 7, borderRadius: 7, background: "var(--c-green)", boxShadow: "0 0 8px var(--c-green)" }} />автосохранение
+                </span>
+              </div>
+              <textarea
+                className="n-in"
+                value={notes[block.id] || ""}
+                onChange={(e) => setNote(block.id, e.target.value)}
+                onBlur={flush}
+                placeholder="Пишите ответы респондента своими словами по ходу разговора…"
+                style={{ minHeight: "min(52vh,420px)", resize: "vertical", lineHeight: 1.65, fontSize: 15.5, padding: "16px 18px" }}
+              />
+            </div>
+          </motion.div>
+        </AnimatePresence>
+      </div>
+
+      {/* навигация */}
+      <div className="n-glass" style={{ ...bar, padding: "16px 30px", position: "relative", zIndex: 2, borderLeft: "none", borderRight: "none", borderBottom: "none" }}>
+        <Btn variant="ghost" onClick={() => { flush(); go(-1); }} disabled={idx === 0} style={{ opacity: idx === 0 ? 0.4 : 1 }}>← Назад</Btn>
+        <div style={{ display: "flex", gap: 7, alignItems: "center" }}>
+          {blocks.map((_, i) => (
+            <span key={i} onClick={() => { flush(); setDir(i >= idx ? 1 : -1); setIdx(i); }} style={{
+              width: i === idx ? 26 : 9, height: 9, borderRadius: 9, cursor: "pointer", transition: "all .28s cubic-bezier(.22,.61,.36,1)",
+              background: i === idx ? "var(--c-blue)" : (notes[blocks[i].id] ? "var(--c-green)" : "var(--c-border-strong)"),
+              boxShadow: i === idx ? "0 0 10px var(--c-glow)" : "none",
+            }} />
+          ))}
+        </div>
+        {idx < blocks.length - 1
+          ? <Btn onClick={() => { flush(); go(1); }}>Далее →</Btn>
+          : <Btn onClick={() => { flush(); setFinishing(true); }} style={{ background: C.green, borderColor: C.green }}>Завершить интервью ✓</Btn>}
+      </div>
+
+      {/* завершение: фиксация инсайта */}
+      {finishing && (
+        <div style={{ position: "absolute", inset: 0, zIndex: 60, background: "var(--c-overlay)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, animation: "nFadeUp .25s both" }}>
+          <div className="n-glass" style={{ borderRadius: 18, padding: 28, width: "100%", maxWidth: 520, animation: "nScaleIn .3s cubic-bezier(.22,.61,.36,1) both" }}>
+            <h3 style={{ margin: "0 0 6px", fontSize: 19, fontWeight: 800, color: "var(--c-text)" }}>Завершение интервью</h3>
+            <p style={{ margin: "0 0 18px", fontSize: 13.5, color: "var(--c-muted)" }}>Все заметки собраны в карточку. Зафиксируйте ключевой инсайт.</p>
+            <Field label="Ключевой инсайт">
+              <Textarea rows={3} value={keyInsight} onChange={(e) => setKeyInsight(e.target.value)} placeholder="Главный вывод из разговора…" />
+            </Field>
+            <label style={{ display: "flex", alignItems: "center", gap: 9, cursor: "pointer", marginBottom: 20 }}>
+              <input type="checkbox" checked={insightFlag} onChange={(e) => setInsightFlag(e.target.checked)} style={{ width: 18, height: 18, accentColor: "var(--c-blue)" }} />
+              <span style={{ fontSize: 14, fontWeight: 600, color: "var(--c-text)" }}>Поставить флаг «инсайт» (учитывается в insight rate и бонусе)</span>
+            </label>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+              <Btn variant="ghost" onClick={() => setFinishing(false)}>Вернуться</Btn>
+              <Btn onClick={() => onFinish(respondent.id, keyInsight, insightFlag)} style={{ background: C.green, borderColor: C.green }}>Готово</Btn>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================================
+// SECTION: compC
+// ============================================================================
+// ============================================================================
+// Компоненты C: Calendar, Reminders, ImportExport, Analytics, Users, Settings
+// ============================================================================
+
+// ---------- Календарь + Telegram-напоминания (3.6) ----------
+function CalendarView({ user, tasks, respondents, leads, reminders, onToggleReminder, isAdmin }) {
+  // личные события: задачи + интервью (слоты) + разборы-пари
+  const events = [];
+  tasks.filter((t) => isAdmin || t.owner === user.id).forEach((t) =>
+    events.push({ when: t.when, title: t.title, type: t.type }));
+  respondents.filter((r) => (isAdmin || r.owner === user.id) && r.slot).forEach((r) =>
+    events.push({ when: r.slot, title: "Интервью: " + r.name, type: "interview" }));
+  events.sort((a, b) => new Date(a.when) - new Date(b.when));
+
+  // неделя
+  const start = new Date(); start.setHours(0, 0, 0, 0);
+  const week = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(start); d.setDate(d.getDate() + i); return d;
+  });
+  const typeColor = { interview: C.blue, demo: C.amber, task: C.muted, call: C.green, email: C.faint };
+
+  const myReminders = reminders.filter((r) => isAdmin || r.to === user.telegram_id);
+
+  return (
+    <div>
+      <h2 style={{ margin: "0 0 16px", fontSize: 22, fontWeight: 800 }}>Календарь и напоминания</h2>
+      <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 16 }}>
+        <Panel>
+          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>Ближайшая неделя</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 6 }}>
+            {week.map((d) => {
+              const iso = d.toISOString().slice(0, 10);
+              const dayEv = events.filter((e) => (e.when || "").slice(0, 10) === iso);
+              const isToday = iso === todayISO();
+              return (
+                <div key={iso} style={{ border: "1px solid " + (isToday ? C.blue : C.border), borderRadius: 9, padding: 7, minHeight: 96, background: isToday ? C.blueLight : C.surface }}>
+                  <div style={{ fontSize: 10.5, color: C.faint, fontWeight: 700, textTransform: "uppercase" }}>{d.toLocaleDateString("ru-RU", { weekday: "short" })}</div>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: isToday ? C.blueDark : C.text, marginBottom: 5 }}>{d.getDate()}</div>
+                  {dayEv.slice(0, 3).map((e, i) => (
+                    <div key={i} style={{ fontSize: 9.5, padding: "2px 4px", borderRadius: 4, marginBottom: 3, background: C.surface, borderLeft: "2px solid " + (typeColor[e.type] || C.blue), color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.title}</div>
+                  ))}
+                  {dayEv.length > 3 && <div style={{ fontSize: 9.5, color: C.faint }}>+{dayEv.length - 3}</div>}
+                </div>
+              );
+            })}
+          </div>
+          <div style={{ fontSize: 13, fontWeight: 700, margin: "20px 0 10px" }}>Повестка</div>
+          {events.length ? events.slice(0, 12).map((e, i) => (
+            <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: "1px solid " + C.border }}>
+              <span style={{ width: 7, height: 7, borderRadius: 7, background: typeColor[e.type] || C.blue }} />
+              <span style={{ flex: 1, fontSize: 13.5 }}>{e.title}</span>
+              <span style={{ fontSize: 12, color: C.faint }}>{fmtDateTime(e.when)}</span>
+            </div>
+          )) : <EmptyState icon="🗓" title="Событий нет" />}
+        </Panel>
+
+        <Panel>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+            <span style={{ fontSize: 13, fontWeight: 700 }}>Telegram-напоминания</span>
+            <Badge color={C.blueDark} bg={C.blueLight}>бот</Badge>
+          </div>
+          <div style={{ fontSize: 11.5, color: C.faint, marginBottom: 14 }}>
+            За день и за 1 час до интервью/разбора + задачи с дедлайном. Отправка — через Telegram Bot API (edge-функция).
+          </div>
+          {myReminders.map((r) => (
+            <div key={r.id} style={{ border: "1px solid " + C.border, borderRadius: 10, padding: 12, marginBottom: 10 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: C.blueDark }}>{r.to}</span>
+                <Badge color={r.sent ? C.green : C.amber} bg={r.sent ? "#E7F6EE" : "#FFF6E9"}>{r.sent ? "отправлено" : "в очереди"}</Badge>
+              </div>
+              <div style={{ fontSize: 13, color: C.text, lineHeight: 1.45 }}>{r.text}</div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8 }}>
+                <span style={{ fontSize: 11.5, color: C.faint }}>{fmtDateTime(r.when)}</span>
+                {!r.sent && <Btn size="sm" variant="soft" onClick={() => onToggleReminder(r.id)}>Отметить отправленным</Btn>}
+              </div>
+            </div>
+          ))}
+          {!myReminders.length && <EmptyState icon="🔔" title="Напоминаний нет" />}
+        </Panel>
+      </div>
+    </div>
+  );
+}
+
+// ---------- Импорт / Экспорт (3.7) ----------
+const LEAD_FIELDS = [
+  { key: "company", label: "Компания" }, { key: "contact", label: "Контактное лицо" },
+  { key: "title", label: "Должность" }, { key: "phone", label: "Телефон" },
+  { key: "email", label: "Email" }, { key: "source", label: "Источник" },
+  { key: "notes", label: "Заметки" },
+];
+const RESP_FIELDS = [
+  { key: "name", label: "Имя" }, { key: "phone", label: "Телефон" },
+  { key: "screenStatus", label: "Статус скрининга" }, { key: "interviewStatus", label: "Статус интервью" },
+  { key: "reward", label: "Вознаграждение" }, { key: "notes", label: "Заметки" },
+];
+
+function ImportExportModal({ kind, existing, projectId, onClose, onImport }) {
+  const fields = kind === "lead" ? LEAD_FIELDS : RESP_FIELDS;
+  const [rows, setRows] = useState(null);
+  const [cols, setCols] = useState([]);
+  const [map, setMap] = useState({});
+  const [result, setResult] = useState(null);
+
+  // «Умный» автоподбор: распознаёт колонки по синонимам, даже если
+  // заголовок в файле назван иначе (тел./phone/номер → Телефон и т.д.).
+  const SYN = {
+    company: ["компания", "company", "организация", "организации", "фирма", "client", "клиент", "название", "company name"],
+    contact: ["контакт", "contact", "контактное лицо", "имя контакта", "лицо", "фио", "представитель", "person"],
+    name: ["имя", "name", "фио", "респондент", "full name", "участник", "контакт"],
+    title: ["должность", "title", "позиция", "position", "role", "роль"],
+    phone: ["телефон", "phone", "тел", "тел.", "номер", "номер телефона", "mobile", "моб", "whatsapp", "cell", "контактный телефон"],
+    email: ["email", "e-mail", "почта", "электронная почта", "mail", "емейл", "эл. почта"],
+    source: ["источник", "source", "канал", "channel", "откуда"],
+    screenStatus: ["скрининг", "статус скрининга", "screen", "screening", "квалификация"],
+    interviewStatus: ["статус интервью", "интервью", "interview", "interview status"],
+    reward: ["вознаграждение", "reward", "оплата", "бонус", "incentive", "приз"],
+    notes: ["заметки", "notes", "комментарий", "комментарии", "примечание", "comment", "note"],
+  };
+  const norm = (s) => (s || "").toString().trim().toLowerCase().replace(/[ё]/g, "е");
+  const autoMap = (columns) => {
+    const m = {};
+    const used = new Set();
+    fields.forEach((f) => {
+      const want = [f.label, f.key, ...(SYN[f.key] || [])].map(norm);
+      // 1) точное совпадение заголовка
+      let hit = columns.find((c) => !used.has(c) && want.includes(norm(c)));
+      // 2) частичное вхождение (заголовок содержит синоним или наоборот)
+      if (!hit) hit = columns.find((c) => !used.has(c) && want.some((w) => w && (norm(c).includes(w) || w.includes(norm(c)))));
+      if (hit) { m[f.key] = hit; used.add(hit); }
+    });
+    return m;
+  };
+
+  const handleFile = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const data = await parseImportFile(file);
+      if (!data.length) return;
+      const columns = Object.keys(data[0]);
+      setRows(data); setCols(columns); setMap(autoMap(columns)); setResult(null);
+    } catch (err) { alert("Не удалось прочитать файл: " + err.message); }
+  };
+
+  const runImport = () => {
+    const existingPhones = new Set(existing.map((x) => normPhone(x.phone)));
+    const seen = new Set();
+    let added = 0, dup = 0;
+    const items = [];
+    rows.forEach((row) => {
+      const obj = {};
+      fields.forEach((f) => { if (map[f.key]) obj[f.key] = String(row[map[f.key]] ?? "").trim(); });
+      const ph = normPhone(obj.phone);
+      if (ph && (existingPhones.has(ph) || seen.has(ph))) { dup++; return; }
+      if (ph) seen.add(ph);
+      items.push(obj);
+      added++;
+    });
+    onImport(items);
+    setResult({ added, dup, total: rows.length });
+  };
+
+  return (
+    <Modal open onClose={onClose} width={620}
+      title={"Импорт " + (kind === "lead" ? "лидов" : "респондентов")}>
+      {!rows && (
+        <div style={{ border: "2px dashed " + C.borderStrong, borderRadius: 12, padding: 32, textAlign: "center" }}>
+          <div style={{ fontSize: 30, marginBottom: 8 }}>📥</div>
+          <div style={{ fontWeight: 700, marginBottom: 4 }}>Загрузите CSV или XLSX</div>
+          <div style={{ fontSize: 12.5, color: C.faint, marginBottom: 14 }}>Дедупликация по номеру телефона включена автоматически</div>
+          <label style={{ display: "inline-block" }}>
+            <input type="file" accept=".csv,.xlsx,.xls" onChange={handleFile} style={{ display: "none" }} />
+            <span style={{ background: C.blue, color: "#fff", padding: "10px 20px", borderRadius: 9, fontWeight: 600, cursor: "pointer", display: "inline-block" }}>Выбрать файл</span>
+          </label>
+        </div>
+      )}
+
+      {rows && !result && (
+        <>
+          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>Маппинг полей · найдено строк: {rows.length}</div>
+          <div style={{ display: "grid", gap: 10 }}>
+            {fields.map((f) => (
+              <div key={f.key} style={{ display: "grid", gridTemplateColumns: "160px 1fr", gap: 12, alignItems: "center" }}>
+                <span style={{ fontSize: 13, fontWeight: 600 }}>{f.label}</span>
+                <Select value={map[f.key] || ""} options={[{ value: "", label: "— не импортировать —" }, ...cols.map((c) => ({ value: c, label: c }))]}
+                  onChange={(e) => setMap((m) => ({ ...m, [f.key]: e.target.value }))} />
+              </div>
+            ))}
+          </div>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 18 }}>
+            <Btn variant="ghost" onClick={() => setRows(null)}>← Другой файл</Btn>
+            <Btn onClick={runImport}>Импортировать {rows.length} строк</Btn>
+          </div>
+        </>
+      )}
+
+      {result && (
+        <div style={{ textAlign: "center", padding: "20px 0" }}>
+          <div style={{ fontSize: 34, marginBottom: 10 }}>✅</div>
+          <div style={{ fontWeight: 800, fontSize: 18, marginBottom: 14 }}>Импорт завершён</div>
+          <div style={{ display: "flex", justifyContent: "center", gap: 24 }}>
+            <div><div style={{ fontSize: 24, fontWeight: 800, color: C.green }}>{result.added}</div><div style={{ fontSize: 12, color: C.faint }}>добавлено</div></div>
+            <div><div style={{ fontSize: 24, fontWeight: 800, color: C.amber }}>{result.dup}</div><div style={{ fontSize: 12, color: C.faint }}>дублей пропущено</div></div>
+            <div><div style={{ fontSize: 24, fontWeight: 800, color: C.muted }}>{result.total}</div><div style={{ fontSize: 12, color: C.faint }}>всего в файле</div></div>
+          </div>
+          <div style={{ marginTop: 20 }}><Btn onClick={onClose}>Готово</Btn></div>
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+// ---------- Аналитика (3.8) ----------
+const CHART_COLORS = ["#2D9CDB", "#27AE60", "#F2994A", "#9B51E0", "#56CCF2", "#EB5757"];
+
+function Analytics({ role, user, leads, projects, respondents, users }) {
+  // Палитра графиков: recharts красит SVG-атрибутами, где var() не работает,
+  // поэтому используем реальные hex, зависящие от текущей темы.
+  const { theme: __theme } = useTheme();
+  const CK = __theme === "dark"
+    ? { axis: "#9DABC0", grid: "rgba(255,255,255,0.10)", blue: "#2D9CDB", green: "#3FB97F", tipBg: "#141C2B", tipBd: "rgba(255,255,255,0.14)", text: "#E6EDF5", sub: "#9DABC0", cursor: "rgba(255,255,255,0.05)" }
+    : { axis: "#6B7785", grid: "#E6EBF0", blue: "#2D9CDB", green: "#27AE60", tipBg: "#FFFFFF", tipBd: "#E6EBF0", text: "#2D2D2D", sub: "#6B7785", cursor: "rgba(45,156,219,0.08)" };
+  const scope = role === "sales" ? leads.filter((l) => l.owner === user.id) : leads;
+  const respScope = role === "interviewer" ? respondents.filter((r) => r.owner === user.id) : respondents;
+
+  // --- продажи ---
+  const byStage = SALES_STAGES.filter((s) => s.id !== "lost").map((s) => ({
+    name: s.title.length > 12 ? s.title.slice(0, 11) + "…" : s.title,
+    Лиды: scope.filter((l) => l.stage === s.id).length,
+  }));
+  const won = scope.filter((l) => l.stage === "won").length;
+  const lost = scope.filter((l) => l.stage === "lost").length;
+  const winRate = won + lost ? Math.round((won / (won + lost)) * 100) : 0;
+  const pipeline = scope.filter((l) => !["won", "lost"].includes(l.stage)).reduce((s, l) => s + (l.amount || 0), 0);
+  const closed = scope.filter((l) => l.stage === "won").reduce((s, l) => s + (l.amount || 0), 0);
+  const demos = scope.reduce((s, l) => s + (l.history || []).filter((a) => a.type === "demo").length, 0);
+
+  // --- рекрутинг ---
+  const interviewers = users.filter((u) => u.role === "interviewer" && (role !== "interviewer" || u.id === user.id));
+  const perInterviewer = interviewers.map((u) => ({
+    name: u.name.split(" ")[0],
+    Интервью: respScope.filter((r) => r.owner === u.id && (r.stage === "done" || r.stage === "insight")).length,
+  }));
+  const totalDone = respScope.filter((r) => r.stage === "done" || r.stage === "insight").length;
+  const noShow = respScope.filter((r) => r.interviewStatus === "Неявка").length;
+  const noShowPct = respScope.length ? Math.round((noShow / respScope.length) * 100) : 0;
+  const withInsight = respScope.filter((r) => r.insight).length;
+  const insightRate = totalDone ? Math.round((withInsight / totalDone) * 100) : 0;
+  const modeShare = [
+    { name: "Режим A (база клиента)", value: projects.filter((p) => p.mode === "A").length },
+    { name: "Режим B (собираем сами)", value: projects.filter((p) => p.mode === "B").length },
+  ];
+  const avgRecruitDays = projects.length
+    ? Math.round(projects.reduce((s, p) => s + Math.max(0, daysBetween(p.start, todayISO())), 0) / projects.length)
+    : 0;
+
+  const Section = ({ title, children }) => (
+    <div style={{ marginBottom: 28 }}>
+      <h3 style={{ fontSize: 15, fontWeight: 800, margin: "0 0 14px", color: C.text }}>{title}</h3>
+      {children}
+    </div>
+  );
+
+  return (
+    <div>
+      <h2 style={{ margin: "0 0 20px", fontSize: 22, fontWeight: 800 }}>Аналитика</h2>
+
+      {role !== "interviewer" && (
+        <Section title="Продажи">
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 12, marginBottom: 16 }}>
+            <StatCard label="Win rate" value={winRate + "%"} sub={won + " выиграно / " + lost + " проиграно"} accent={C.green} />
+            <StatCard label="Пайплайн" value={fmtMoney(pipeline)} sub="в активных стадиях" />
+            <StatCard label="Закрытая выручка" value={fmtMoney(closed)} accent={C.blue} />
+            <StatCard label="Разборов-пари" value={demos} sub="всего проведено" />
+          </div>
+          <Panel>
+            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 14 }}>Лиды по стадиям воронки</div>
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart data={byStage} margin={{ top: 4, right: 8, left: -18, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke={CK.grid} vertical={false} />
+                <XAxis dataKey="name" tick={{ fontSize: 11, fill: CK.axis }} interval={0} angle={-12} textAnchor="end" height={50} />
+                <YAxis tick={{ fontSize: 11, fill: CK.axis }} allowDecimals={false} />
+                <Tooltip cursor={{ fill: CK.cursor }} contentStyle={{ background: CK.tipBg, border: "1px solid " + CK.tipBd, borderRadius: 10, boxShadow: "0 8px 28px rgba(0,0,0,0.35)" }} itemStyle={{ color: CK.text }} labelStyle={{ color: CK.sub }} />
+                <Bar dataKey="Лиды" fill={CK.blue} radius={[6, 6, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </Panel>
+        </Section>
+      )}
+
+      {role !== "sales" && (
+        <Section title="Рекрутинг и доставка">
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 12, marginBottom: 16 }}>
+            <StatCard label="Интервью проведено" value={totalDone} accent={C.blue} />
+            <StatCard label="Insight rate" value={insightRate + "%"} sub={withInsight + " с инсайтом"} accent={C.green} />
+            <StatCard label="% неявок" value={noShowPct + "%"} accent={noShowPct > 20 ? C.red : C.text} />
+            <StatCard label="Ср. дней на рекрутинг" value={avgRecruitDays} sub="по активным проектам" />
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr", gap: 16 }}>
+            <Panel>
+              <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 14 }}>Проведено интервью на интервьюера</div>
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={perInterviewer} margin={{ top: 4, right: 8, left: -18, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={CK.grid} vertical={false} />
+                  <XAxis dataKey="name" tick={{ fontSize: 11, fill: CK.axis }} />
+                  <YAxis tick={{ fontSize: 11, fill: CK.axis }} allowDecimals={false} />
+                  <Tooltip cursor={{ fill: CK.cursor }} contentStyle={{ background: CK.tipBg, border: "1px solid " + CK.tipBd, borderRadius: 10, boxShadow: "0 8px 28px rgba(0,0,0,0.35)" }} itemStyle={{ color: CK.text }} labelStyle={{ color: CK.sub }} />
+                  <Bar dataKey="Интервью" fill={CK.green} radius={[6, 6, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </Panel>
+            <Panel>
+              <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 14 }}>Проекты: режим A vs B</div>
+              <ResponsiveContainer width="100%" height={220}>
+                <PieChart>
+                  <Pie data={modeShare} dataKey="value" nameKey="name" cx="50%" cy="45%" outerRadius={70} label>
+                    {modeShare.map((e, i) => <Cell key={i} fill={CHART_COLORS[i]} />)}
+                  </Pie>
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                </PieChart>
+              </ResponsiveContainer>
+            </Panel>
+          </div>
+        </Section>
+      )}
+    </div>
+  );
+}
+
+// ---------- Управление пользователями (admin) ----------
+function UsersView({ users, onSave }) {
+  const [edit, setEdit] = useState(null);
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>Пользователи</h2>
+        <Btn onClick={() => setEdit({ id: uid("u"), name: "", role: "interviewer", telegram_id: "", email: "", active: true })}>+ Добавить</Btn>
+      </div>
+      <Panel pad={0}>
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <thead><tr style={{ background: C.panel }}>
+            {["Имя", "Роль", "Telegram", "Email", "Статус", ""].map((h) => (
+              <th key={h} style={{ textAlign: "left", padding: "12px 16px", fontSize: 12, fontWeight: 700, color: C.muted }}>{h}</th>
+            ))}
+          </tr></thead>
+          <tbody>
+            {users.map((u) => (
+              <tr key={u.id} style={{ borderTop: "1px solid " + C.border }}>
+                <td style={{ padding: "12px 16px", fontWeight: 600, fontSize: 13.5 }}>{u.name}</td>
+                <td style={{ padding: "12px 16px" }}><Badge>{ROLES[u.role]}</Badge></td>
+                <td style={{ padding: "12px 16px", fontSize: 13, color: C.blueDark }}>{u.telegram_id}</td>
+                <td style={{ padding: "12px 16px", fontSize: 13, color: C.muted }}>{u.email}</td>
+                <td style={{ padding: "12px 16px" }}>
+                  <Badge color={u.active ? C.green : C.faint} bg={u.active ? "#E7F6EE" : C.panel}>{u.active ? "активен" : "выключен"}</Badge>
+                </td>
+                <td style={{ padding: "12px 16px", textAlign: "right" }}><Btn variant="ghost" size="sm" onClick={() => setEdit(u)}>Изменить</Btn></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Panel>
+      {edit && <UserEdit user={edit} onClose={() => setEdit(null)} onSave={(u) => { onSave(u); setEdit(null); }} />}
+    </div>
+  );
+}
+function UserEdit({ user, onClose, onSave }) {
+  const [u, setU] = useState({ ...user });
+  const set = (k, v) => setU((p) => ({ ...p, [k]: v }));
+  return (
+    <Modal open onClose={onClose} width={460} title={user.name ? "Редактирование" : "Новый пользователь"}
+      footer={<><Btn variant="ghost" onClick={onClose}>Отмена</Btn><Btn onClick={() => onSave(u)}>Сохранить</Btn></>}>
+      <Field label="Имя"><Input value={u.name} onChange={(e) => set("name", e.target.value)} /></Field>
+      <Field label="Роль"><Select value={u.role} options={Object.entries(ROLES).map(([v, l]) => ({ value: v, label: l }))} onChange={(e) => set("role", e.target.value)} /></Field>
+      <Field label="Telegram ID" hint="на этот @username приходят напоминания"><Input value={u.telegram_id} onChange={(e) => set("telegram_id", e.target.value)} /></Field>
+      <Field label="Email"><Input value={u.email} onChange={(e) => set("email", e.target.value)} /></Field>
+      <label style={{ display: "flex", alignItems: "center", gap: 9, cursor: "pointer" }}>
+        <input type="checkbox" checked={u.active} onChange={(e) => set("active", e.target.checked)} />
+        <span style={{ fontSize: 13.5, fontWeight: 600 }}>Активен</span>
+      </label>
+    </Modal>
+  );
+}
+
+// ---------- Настройки и интеграции (admin) ----------
+function SettingsView({ onReset }) {
+  return (
+    <div>
+      <h2 style={{ margin: "0 0 20px", fontSize: 22, fontWeight: 800 }}>Настройки и интеграции</h2>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+        <Panel>
+          <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 4 }}>Telegram-бот</div>
+          <div style={{ fontSize: 12.5, color: C.faint, marginBottom: 14 }}>Напоминания о задачах, разборах и интервью.</div>
+          <Field label="Bot token"><Input placeholder="123456:ABC-DEF…" /></Field>
+          <Field label="Webhook / edge-функция"><Input placeholder="https://<project>.functions.supabase.co/tg-remind" /></Field>
+          <Btn variant="soft">Проверить соединение</Btn>
+        </Panel>
+        <Panel>
+          <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 4 }}>Supabase (бэкенд)</div>
+          <div style={{ fontSize: 12.5, color: C.faint, marginBottom: 14 }}>Postgres + Auth + RLS + Storage для записей интервью.</div>
+          <Field label="Project URL"><Input placeholder="https://xxxx.supabase.co" /></Field>
+          <Field label="Anon key"><Input placeholder="eyJhbGciOi…" /></Field>
+          <Btn variant="soft">Сохранить ключи</Btn>
+        </Panel>
+        <Panel>
+          <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 4 }}>Импорт результатов роботов</div>
+          <div style={{ fontSize: 12.5, color: C.faint, marginBottom: 14 }}>CSV-импорт респондентов с проставленными статусами — на вкладке «Импорт/Экспорт» каждого проекта.</div>
+          <Badge color={C.green} bg="#E7F6EE">обычный CSV-импорт</Badge>
+        </Panel>
+        <Panel>
+          <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 4 }}>Данные демо</div>
+          <div style={{ fontSize: 12.5, color: C.faint, marginBottom: 14 }}>Сбросить все локальные данные и вернуть исходный seed.</div>
+          <Btn variant="danger" onClick={onReset}>Сбросить демо-данные</Btn>
+        </Panel>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// SECTION: app
+// ============================================================================
+// ============================================================================
+// App — состояние, persist, маршрутизация по ролям и правам (3.1–3.2)
+// ============================================================================
+
+const PAGE = { background: C.bg, minHeight: "100vh", fontFamily: FONT, color: C.text };
+const fontStyle = `@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+  * { box-sizing: border-box; } body { margin: 0; }
+  ::-webkit-scrollbar { height: 10px; width: 10px; } ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--c-border-strong); border-radius: 20px; border: 3px solid transparent; background-clip: padding-box; }`;
+
+function CRMApp({ onSignOut }) {
+  const [db, setDb] = useState(null);
+  const [userId, setUserId] = useState(null);
+  const [page, setPage] = useState("sales");
+
+  // навигационное/модальное состояние
+  const [openLead, setOpenLead] = useState(null);
+  const [convertLead, setConvertLead] = useState(null);
+  const [openResp, setOpenResp] = useState(null);
+  const [activeProject, setActiveProject] = useState(null); // id (admin drill-in / interviewer per-project)
+  const [interviewMode, setInterviewMode] = useState(null); // {respId}
+  const [importKind, setImportKind] = useState(null); // {kind, projectId?}
+  const saveT = useRef(null);
+
+  // загрузка
+  useEffect(() => {
+    let alive = true;
+    loadState().then((saved) => {
+      if (!alive || !saved) return;
+      setDb(saved);
+      setUserId(saved.__me || saved.users[0].id);
+    });
+    return () => { alive = false; };
+  }, []);
+
+  // персист (debounce)
+  useEffect(() => {
+    if (!db) return;
+    if (saveT.current) clearTimeout(saveT.current);
+    saveT.current = setTimeout(() => saveState(db), 400);
+  }, [db]);
+
+  if (!db || !userId) {
+    return <div style={{ ...PAGE, display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ color: C.faint }}>Загрузка InsightLab CRM…</div>
+    </div>;
+  }
+
+  const user = db.users.find((u) => u.id === userId);
+  const role = user.role;
+  const isAdmin = role === "admin";
+
+  const patch = (changes) => setDb((d) => ({ ...d, ...changes }));
+  const upd = (key, id, fn) => setDb((d) => ({ ...d, [key]: d[key].map((x) => (x.id === id ? fn(x) : x)) }));
+
+  // ---------- навигация по ролям ----------
+  const NAV = {
+    admin: [
+      { id: "sales", label: "Продажи", icon: "📊" },
+      { id: "recruit", label: "Рекрутинг", icon: "🎙" },
+      { id: "calendar", label: "Календарь", icon: "🗓" },
+      { id: "analytics", label: "Аналитика", icon: "📈" },
+      { id: "users", label: "Пользователи", icon: "👤" },
+      { id: "settings", label: "Настройки", icon: "⚙️" },
+    ],
+    sales: [
+      { id: "sales", label: "Продажи", icon: "📊" },
+      { id: "calendar", label: "Календарь", icon: "🗓" },
+      { id: "analytics", label: "Аналитика", icon: "📈" },
+    ],
+    interviewer: [
+      { id: "workspace", label: "Рабочее пространство", icon: "🎙" },
+      { id: "calendar", label: "Календарь", icon: "🗓" },
+      { id: "analytics", label: "Аналитика", icon: "📈" },
+    ],
+  };
+  const nav = NAV[role];
+  const validPage = nav.some((n) => n.id === page) ? page : nav[0].id;
+
+  const switchUser = (id) => {
+    const u = db.users.find((x) => x.id === id);
+    setUserId(id);
+    setActiveProject(null); setOpenLead(null); setOpenResp(null);
+    setPage(NAV[u.role][0].id);
+  };
+
+  // ---------- данные с учётом прав (3.2) ----------
+  const visibleLeads = isAdmin ? db.leads : db.leads.filter((l) => l.owner === userId);
+  const visibleProjects = isAdmin ? db.projects
+    : role === "interviewer" ? db.projects.filter((p) => p.interviewers.includes(userId))
+    : [];
+  const projectById = (id) => db.projects.find((p) => p.id === id);
+
+  // ---------- действия: лиды ----------
+  const moveLead = (id, stage) => {
+    upd("leads", id, (l) => ({ ...l, stage, history: [...(l.history || []), { id: uid("act"), type: "task", title: "Перемещён → " + (SALES_STAGES.find((s) => s.id === stage)?.title), when: nowISO(), done: true, owner: l.owner }] }));
+    if (stage === "won") { const l = db.leads.find((x) => x.id === id); if (l) setConvertLead({ ...l, stage }); }
+  };
+  const saveLead = (l) => db.leads.some((x) => x.id === l.id) ? upd("leads", l.id, () => l) : patch({ leads: [...db.leads, l] });
+  const createProjectFromLead = (lead, form) => {
+    const proj = {
+      id: uid("proj"), client: form.client, pkg: form.pkg, price: form.price,
+      start: todayISO(), deadline: form.deadline, interviewers: form.interviewers,
+      mode: form.mode, status: "active", planInterviews: form.planInterviews,
+      script: { id: uid("scr"), name: "Скрипт: " + form.client, blocks: [] },
+    };
+    patch({ projects: [...db.projects, proj] });
+    upd("leads", lead.id, (l) => ({ ...l, stage: "won" }));
+    setConvertLead(null); setOpenLead(null);
+  };
+
+  // ---------- действия: респонденты ----------
+  const moveResp = (id, stage) => {
+    upd("respondents", id, (r) => {
+      const next = { ...r, stage };
+      if (stage === "done") next.interviewStatus = "Проведено";
+      if (stage === "insight") { next.interviewStatus = "Проведено"; next.insight = true; }
+      if (stage === "no_show") next.interviewStatus = "Неявка";
+      if (stage === "refused") next.interviewStatus = "Отказ";
+      return next;
+    });
+  };
+  const saveResp = (r) => upd("respondents", r.id, () => r);
+  const deleteLeads = (ids) => { const s = new Set(ids); patch({ leads: db.leads.filter((l) => !s.has(l.id)) }); };
+  const deleteResps = (ids) => { const s = new Set(ids); patch({ respondents: db.respondents.filter((r) => !s.has(r.id)) }); };
+  const saveScript = (projectId, script) => upd("projects", projectId, (p) => ({ ...p, script }));
+
+  // ---------- интервью: заметки + завершение ----------
+  const saveNote = (respId, blockId, text) => setDb((d) => ({
+    ...d, notes: { ...d.notes, [respId]: { ...(d.notes?.[respId] || {}), [blockId]: text } },
+  }));
+  const finishInterview = (respId, keyInsight, insightFlag) => {
+    upd("respondents", respId, (r) => ({
+      ...r, stage: insightFlag ? "insight" : "done",
+      interviewStatus: "Проведено", keyInsight, insight: insightFlag,
+    }));
+    setInterviewMode(null); setOpenResp(null);
+  };
+
+  // ---------- импорт ----------
+  const doImport = (items) => {
+    if (importKind.kind === "lead") {
+      patch({ leads: [...db.leads, ...items.map((it) => ({
+        id: uid("lead"), company: it.company || "—", contact: it.contact || "", title: it.title || "",
+        phone: it.phone || "", email: it.email || "", source: SOURCES.includes(it.source) ? it.source : "Робот",
+        stage: "new", owner: userId, nextTouch: todayISO(), amount: 0, notes: it.notes || "", history: [],
+      }))] });
+    } else {
+      const pid = importKind.projectId;
+      patch({ respondents: [...db.respondents, ...items.map((it) => ({
+        id: uid("resp"), name: it.name || "—", phone: it.phone || "", project: pid,
+        screenStatus: it.screenStatus || "—", qualified: false, slot: null,
+        interviewStatus: it.interviewStatus || "—", reward: it.reward || "Нет",
+        insight: false, keyInsight: "", recording: "", stage: "loaded", owner: userId, notes: it.notes || "",
+      }))] });
+    }
+  };
+
+  const reset = async () => {
+    if (!confirm("Перезагрузить данные из базы?")) return;
+    const fresh = await loadState();
+    if (fresh) { setDb(fresh); setUserId(fresh.__me || fresh.users[0].id); }
+    setActiveProject(null); setPage("settings");
+  };
+
+  // экспорт лидов
+  const exportLeads = (fmt) => exportRows(visibleLeads, [
+    { label: "Компания", get: (l) => l.company }, { label: "Контакт", get: (l) => l.contact },
+    { label: "Должность", get: (l) => l.title }, { label: "Телефон", get: (l) => l.phone },
+    { label: "Email", get: (l) => l.email }, { label: "Источник", get: (l) => l.source },
+    { label: "Стадия", get: (l) => SALES_STAGES.find((s) => s.id === l.stage)?.title },
+    { label: "Сумма", get: (l) => l.amount }, { label: "Заметки", get: (l) => l.notes },
+  ], "leads_insightlab", fmt);
+
+  // ---------- карточка лида в канбане ----------
+  const leadCard = (l, ds) => (
+    <KanbanCard key={l.id} onDragStart={ds} onClick={() => setOpenLead(l)}
+      accent={l.stage === "won" ? C.green : l.stage === "lost" ? C.red : C.blue}>
+      <div style={{ fontWeight: 700, fontSize: 13.5 }}>{l.company}</div>
+      <div style={{ fontSize: 12, color: C.faint, marginTop: 2 }}>{l.contact} · {l.title}</div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8 }}>
+        <Badge color={C.muted} bg={C.panel}>{l.source}</Badge>
+        <span style={{ fontSize: 12, fontWeight: 700, color: C.text }}>{fmtMoney(l.amount)}</span>
+      </div>
+      {l.nextTouch && <div style={{ fontSize: 11, color: C.blueDark, marginTop: 6 }}>↻ касание {fmtDate(l.nextTouch)}</div>}
+    </KanbanCard>
+  );
+
+  // ====================== Рендер страниц ======================
+  let content = null;
+
+  if (validPage === "sales") {
+    content = (
+      <>
+        <PageHead title="Воронка продаж" sub={isAdmin ? "Все лиды" : "Ваши лиды"}>
+          <Btn variant="ghost" size="sm" onClick={() => exportLeads("csv")}>↓ CSV</Btn>
+          <Btn variant="ghost" size="sm" onClick={() => exportLeads("xlsx")}>↓ XLSX</Btn>
+          <Btn variant="ghost" size="sm" onClick={() => setImportKind({ kind: "lead" })}>↑ Импорт</Btn>
+          <Btn onClick={() => setOpenLead({ id: uid("lead"), company: "", contact: "", title: "", phone: "", email: "", source: "LinkedIn", stage: "new", owner: userId, nextTouch: todayISO(), amount: 0, notes: "", history: [] })}>+ Лид</Btn>
+        </PageHead>
+        <KanbanBoard stages={SALES_STAGES} items={visibleLeads} getStage={(l) => l.stage} renderCard={leadCard} onMove={moveLead} onDelete={deleteLeads} />
+      </>
+    );
+  }
+
+  else if (validPage === "recruit") { // admin
+    if (activeProject) {
+      const p = projectById(activeProject);
+      content = <ProjectView project={p} users={db.users} respondents={db.respondents}
+        canEditScript={true} canConduct={true}
+        onMoveResp={moveResp} onOpenResp={setOpenResp} onDeleteResp={deleteResps}
+        onSaveScript={(s) => saveScript(p.id, s)} onBack={() => setActiveProject(null)} />;
+    } else {
+      content = (
+        <>
+          <PageHead title="Рекрутинг" sub="Все проекты доставки">
+            <Btn variant="ghost" size="sm" onClick={() => setImportKind({ kind: "resp", projectId: db.projects[0]?.id })}>↑ Импорт респондентов</Btn>
+          </PageHead>
+          <ProjectsGrid projects={visibleProjects} users={db.users} respondents={db.respondents} onOpen={setActiveProject} />
+        </>
+      );
+    }
+  }
+
+  else if (validPage === "workspace") { // interviewer
+    if (activeProject) {
+      const p = projectById(activeProject);
+      content = (
+        <>
+          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+            <Btn variant="ghost" size="sm" onClick={() => setImportKind({ kind: "resp", projectId: p.id })}>↑ Импорт респондентов</Btn>
+          </div>
+          <ProjectView project={p} users={db.users} respondents={db.respondents}
+            canEditScript={false} canConduct={true}
+            onMoveResp={moveResp} onOpenResp={setOpenResp} onDeleteResp={deleteResps}
+            onSaveScript={(s) => saveScript(p.id, s)} onBack={() => setActiveProject(null)} />
+        </>
+      );
+    } else {
+      content = <InterviewerHome user={user} projects={db.projects} respondents={db.respondents} tasks={db.tasks}
+        onOpenProject={(id) => setActiveProject(id)} onOpenResp={setOpenResp} />;
+    }
+  }
+
+  else if (validPage === "calendar") {
+    content = <CalendarView user={user} tasks={db.tasks} respondents={db.respondents} leads={db.leads}
+      reminders={db.reminders} isAdmin={isAdmin}
+      onToggleReminder={(id) => upd("reminders", id, (r) => ({ ...r, sent: true }))} />;
+  }
+
+  else if (validPage === "analytics") {
+    content = <Analytics role={role} user={user} leads={db.leads} projects={db.projects} respondents={db.respondents} users={db.users} />;
+  }
+
+  else if (validPage === "users") content = <UsersView users={db.users} onSave={saveLeadUser} />;
+  else if (validPage === "settings") content = <SettingsView onReset={reset} />;
+
+  function saveLeadUser(u) {
+    db.users.some((x) => x.id === u.id) ? upd("users", u.id, () => u) : patch({ users: [...db.users, u] });
+  }
+
+  // активное интервью (полноэкранный слайдер)
+  const interviewResp = interviewMode && db.respondents.find((r) => r.id === interviewMode.respId);
+  const interviewProject = interviewResp && projectById(interviewResp.project);
+
+  return (
+    <div style={PAGE}>
+      <style>{fontStyle}</style>
+      <button onClick={onSignOut} title="Выйти"
+        style={{ position: "fixed", top: 14, right: 18, zIndex: 50, border: "1px solid " + C.border,
+          background: C.surface, color: C.muted, borderRadius: 8, padding: "6px 12px",
+          fontFamily: FONT, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+        Выйти
+      </button>
+      <Header user={user} users={isAdmin ? db.users : [user]} onSwitchUser={switchUser} nav={nav} current={validPage} onNav={(p) => { setPage(p); setActiveProject(null); }} />
+      <main style={{ maxWidth: 1280, margin: "0 auto", padding: "26px 24px 80px" }}>{content}</main>
+
+      {/* Модалки */}
+      {openLead && (
+        <LeadDetail lead={openLead} users={db.users}
+          canEdit={isAdmin || (role === "sales" && (openLead.owner === userId || !db.leads.some((x) => x.id === openLead.id)))}
+          onSave={saveLead} onClose={() => setOpenLead(null)}
+          onConvert={(l) => { setOpenLead(null); setConvertLead(l); }} />
+      )}
+      {convertLead && (
+        <ConvertModal lead={convertLead} users={db.users} onClose={() => setConvertLead(null)}
+          onCreate={(form) => createProjectFromLead(convertLead, form)} />
+      )}
+      {openResp && (
+        <RespondentDetail resp={openResp} project={projectById(openResp.project)} users={db.users}
+          canEdit={isAdmin || openResp.owner === userId}
+          onSave={saveResp} onClose={() => setOpenResp(null)}
+          onStartInterview={(r) => { setOpenResp(null); setInterviewMode({ respId: r.id }); }} />
+      )}
+      {importKind && (
+        <ImportExportModal kind={importKind.kind} projectId={importKind.projectId}
+          existing={importKind.kind === "lead" ? db.leads : db.respondents}
+          onClose={() => setImportKind(null)} onImport={doImport} />
+      )}
+      {interviewResp && interviewProject && (
+        <InterviewSlider respondent={interviewResp} project={interviewProject}
+          initialNotes={db.notes?.[interviewResp.id] || {}}
+          onSaveNote={saveNote} onFinish={finishInterview} onClose={() => setInterviewMode(null)} />
+      )}
+    </div>
+  );
+}
+
+// ---------- мелкие хелперы рендера ----------
+function PageHead({ title, sub, children }) {
+  return (
+    <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 18, flexWrap: "wrap", gap: 12 }}>
+      <div>
+        <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.text }}>{title}</h2>
+        {sub && <div style={{ fontSize: 13, color: C.muted, marginTop: 3 }}>{sub}</div>}
+      </div>
+      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>{children}</div>
+    </div>
+  );
+}
+
+function ProjectsGrid({ projects, users, respondents, onOpen }) {
+  if (!projects.length) return <EmptyState icon="📁" title="Проектов нет" text="Выиграйте лид в воронке продаж — создастся проект." />;
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(260px,1fr))", gap: 16 }}>
+      {projects.map((p) => {
+        const pr = respondents.filter((r) => r.project === p.id);
+        const done = pr.filter((r) => r.stage === "done" || r.stage === "insight").length;
+        const pct = p.planInterviews ? Math.round((done / p.planInterviews) * 100) : 0;
+        const ints = users.filter((u) => p.interviewers.includes(u.id)).map((u) => u.name.split(" ")[0]).join(", ");
+        return (
+          <Panel key={p.id} style={{ cursor: "pointer" }} >
+            <div onClick={() => onOpen(p.id)}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
+                <div style={{ fontWeight: 800, fontSize: 16 }}>{p.client}</div>
+                <Badge>{p.pkg}</Badge>
+              </div>
+              <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>
+                <Badge color={p.mode === "A" ? C.blueDark : C.amber} bg={p.mode === "A" ? C.blueLight : "#FFF6E9"}>Режим {p.mode}</Badge>
+                <Badge color={C.muted} bg={C.panel}>до {fmtDate(p.deadline)}</Badge>
+              </div>
+              <div style={{ height: 8, background: C.panel, borderRadius: 20, overflow: "hidden", marginBottom: 6 }}>
+                <div style={{ width: pct + "%", height: "100%", background: C.blue }} />
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.faint }}>
+                <span>{done} / {p.planInterviews} интервью</span><span>{pct}%</span>
+              </div>
+              <div style={{ fontSize: 12, color: C.muted, marginTop: 10 }}>Интервьюеры: {ints || "—"}</div>
+            </div>
+          </Panel>
+        );
+      })}
+    </div>
+  );
+}
+
+// ============================================================================
+// Авторизация: пока нет сессии — показываем экран входа; после входа — CRM.
+// ============================================================================
+function AppInner() {
+  const [session, setSession] = useState(undefined); // undefined = проверяем
+
+  useEffect(() => {
+    auth.getSession().then(({ data }) => setSession(data.session || null));
+    const { data: sub } = auth.onChange((s) => setSession(s));
+    return () => sub.subscription.unsubscribe();
+  }, []);
+
+  if (session === undefined) {
+    return (
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center",
+        justifyContent: "center", fontFamily: FONT, color: C.faint }}>
+        Загрузка…
+      </div>
+    );
+  }
+  if (!session) return <Login />;
+  return <CRMApp key={session.user.id} onSignOut={() => auth.signOut()} />;
+}
+
+export default function App() {
+  return (
+    <ThemeProvider>
+      <AppInner />
+    </ThemeProvider>
+  );
+}

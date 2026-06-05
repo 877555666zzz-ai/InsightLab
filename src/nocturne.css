@@ -1,0 +1,173 @@
+/* ============================================================================
+   InsightLab — dual-theme token system  (Nocturne dark  +  Daylight light)
+   Import ONCE, e.g. in src/main.jsx:   import "./nocturne.css";
+   ----------------------------------------------------------------------------
+   ARCHITECTURE
+   • Every color in the app flows through CSS variables named --c-*.
+   • The `C` design-token object in InsightLabCRM.jsx maps 1:1 onto these
+     (C.bg -> var(--c-bg), C.text -> var(--c-text), ...), so switching the
+     [data-theme] attribute on <html> re-themes the WHOLE app instantly —
+     every screen, card, modal, toast, chart container.
+   • Set <html data-theme="dark"> or "light". Default below = dark.
+   ============================================================================ */
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap");
+
+/* ---------- DARK (Nocturne) — default ---------- */
+:root,
+[data-theme="dark"]{
+  color-scheme: dark;
+  --c-bg:#0B1220;
+  --c-bg-grad: radial-gradient(120% 120% at 50% -10%, #14213a 0%, #0E1525 42%, #0B1220 100%);
+  --c-text:#E6EDF5;
+  --c-muted:#9DABC0;
+  --c-faint:#6B7A91;
+  --c-blue:#2D9CDB;
+  --c-blue-dark:#1F86C2;
+  --c-blue-light:rgba(45,156,219,0.16);   /* highlight wash */
+  --c-blue-soft:rgba(45,156,219,0.14);
+  --c-border:rgba(255,255,255,0.08);
+  --c-border-strong:rgba(255,255,255,0.14);
+  --c-surface:#151D2D;                     /* solid card */
+  --c-panel:#0F1726;                       /* recessed panel */
+  --c-green:#3FB97F;
+  --c-red:#E5586E;
+  --c-amber:#E0A93B;
+  --c-glow:rgba(45,156,219,0.45);
+  --c-shadow:0 1px 2px rgba(0,0,0,0.30), 0 4px 14px -6px rgba(0,0,0,0.50);
+  --c-shadow-md:0 12px 34px -12px rgba(0,0,0,0.62), 0 2px 8px rgba(0,0,0,0.35);
+  --c-shadow-lg:0 30px 80px -24px rgba(0,0,0,0.72);
+  --c-card-sheen:linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0) 42%);
+  --c-ring:rgba(45,156,219,0.18);          /* focus ring wash */
+  /* glass */
+  --c-glass:rgba(18,26,40,0.72);
+  --c-glass-border:rgba(255,255,255,0.08);
+  --c-glass-blur:18px;
+  --c-on-accent:#04101c;                   /* text on blue/green buttons */
+  --c-overlay:rgba(6,10,18,0.62);          /* modal backdrop */
+  --c-hint-bg:rgba(224,169,59,0.10);       /* interviewer hint box */
+  --c-hint-bd:rgba(224,169,59,0.28);
+  --c-hint-tx:#e7c98a;
+}
+
+/* ---------- LIGHT (Daylight) — original brand palette ---------- */
+[data-theme="light"]{
+  color-scheme: light;
+  --c-bg:#EEF2F8;
+  --c-bg-grad: linear-gradient(160deg, #F5F8FC 0%, #EDF1F8 46%, #E7EDF6 100%);
+  --c-text:#1C2433;
+  --c-muted:#65728A;
+  --c-faint:#94A1B4;
+  --c-blue:#2D9CDB;
+  --c-blue-dark:#1F86C2;
+  --c-blue-light:#E9F3FB;
+  --c-blue-soft:#EEF5FB;
+  --c-border:#E7ECF3;
+  --c-border-strong:#D7DEE9;
+  --c-surface:#FFFFFF;
+  --c-panel:#F3F6FB;
+  --c-green:#27AE60;
+  --c-red:#EB5757;
+  --c-amber:#F2994A;
+  --c-glow:rgba(45,156,219,0.30);
+  --c-shadow:0 1px 2px rgba(28,46,82,0.05), 0 4px 14px -6px rgba(28,46,82,0.10);
+  --c-shadow-md:0 14px 34px -14px rgba(28,46,82,0.18), 0 4px 12px -6px rgba(28,46,82,0.08);
+  --c-shadow-lg:0 30px 70px -26px rgba(28,46,82,0.28);
+  --c-card-sheen:linear-gradient(180deg, rgba(255,255,255,0.9), rgba(255,255,255,0) 40%);
+  --c-ring:rgba(45,156,219,0.16);
+  /* glass */
+  --c-glass:rgba(255,255,255,0.72);
+  --c-glass-border:rgba(45,80,120,0.10);
+  --c-glass-blur:14px;
+  --c-on-accent:#FFFFFF;
+  --c-overlay:rgba(45,45,45,0.42);
+  --c-hint-bg:#FFF6E9;
+  --c-hint-bd:#F4D9AE;
+  --c-hint-tx:#9A6A1E;
+}
+
+/* ---------- shared scale (theme-independent) ---------- */
+:root{
+  --r-card:20px;     /* big soft cards */
+  --r-tile:18px;     /* kpi / kanban column */
+  --r-ctl:12px;      /* buttons, inputs */
+  --r-pill:999px;
+  --sp:8px;
+}
+
+*{box-sizing:border-box;}
+html{scroll-behavior:smooth;}
+body{
+  margin:0; font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  color:var(--c-text); background:var(--c-bg-grad); background-attachment:fixed;
+  -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+}
+
+/* smooth, app-wide theme cross-fade — cheap props only (color/bg/border).
+   box-shadow/fill/stroke are intentionally excluded from the universal rule so
+   a theme switch doesn't animate shadows on hundreds of nodes at once. */
+*,*::before,*::after{
+  transition: background-color .28s ease, border-color .28s ease, color .22s ease;
+}
+
+/* glass surface — adapts to theme */
+.n-glass{
+  background:var(--c-glass);
+  backdrop-filter:blur(var(--c-glass-blur)) saturate(140%);
+  -webkit-backdrop-filter:blur(var(--c-glass-blur)) saturate(140%);
+  border:1px solid var(--c-glass-border);
+  box-shadow:var(--c-shadow-lg), inset 0 1px 0 rgba(255,255,255,0.05);
+}
+
+/* scrollbar */
+::-webkit-scrollbar{width:11px;height:11px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--c-border-strong);border-radius:20px;border:3px solid transparent;background-clip:padding-box;}
+::-webkit-scrollbar-thumb:hover{background:var(--c-faint);background-clip:padding-box;}
+*{scrollbar-color:var(--c-border-strong) transparent;scrollbar-width:thin;}
+
+/* keyframes */
+@keyframes nFadeUp{from{opacity:0;transform:translateY(14px);}to{opacity:1;transform:none;}}
+@keyframes nScaleIn{from{opacity:0;transform:scale(.96) translateY(8px);}to{opacity:1;transform:none;}}
+@keyframes nSlideIn{from{opacity:0;transform:translateX(26px);}to{opacity:1;transform:none;}}
+@keyframes nShimmer{0%{background-position:-460px 0;}100%{background-position:460px 0;}}
+@keyframes nToastIn{from{opacity:0;transform:translateY(16px) scale(.96);}to{opacity:1;transform:none;}}
+@keyframes nSpin{to{transform:rotate(360deg);}}
+
+/* buttons */
+.n-btn{font-family:inherit;font-weight:600;border-radius:11px;cursor:pointer;
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;white-space:nowrap;border:1px solid transparent;
+  transition:transform .18s cubic-bezier(.22,.61,.36,1),box-shadow .25s,background .2s,border-color .2s,opacity .2s,color .2s;}
+.n-btn:active{transform:translateY(1px) scale(.99);}
+.n-btn-primary{background:linear-gradient(180deg,#34a6e6,var(--c-blue));color:var(--c-on-accent);font-weight:700;
+  box-shadow:0 8px 26px -8px rgba(45,156,219,0.5),inset 0 1px 0 rgba(255,255,255,0.35);}
+.n-btn-primary:hover{box-shadow:0 0 24px 1px var(--c-glow),0 10px 30px -6px rgba(45,156,219,0.6);transform:translateY(-1px);}
+.n-btn-ghost{background:transparent;color:var(--c-text);border:1px solid var(--c-border-strong);}
+.n-btn-ghost:hover{background:var(--c-blue-soft);border-color:rgba(45,156,219,0.45);}
+.n-btn-green{background:linear-gradient(180deg,#4ccb8e,var(--c-green));color:var(--c-on-accent);font-weight:700;box-shadow:0 8px 26px -8px rgba(63,185,127,0.5);}
+.n-btn-green:hover{box-shadow:0 0 22px 1px rgba(63,185,127,0.4),0 10px 30px -6px rgba(63,185,127,0.55);transform:translateY(-1px);}
+
+/* inputs */
+.n-in{width:100%;padding:12px 14px;border-radius:11px;background:var(--c-panel);
+  border:1px solid var(--c-border-strong);color:var(--c-text);font-size:14px;font-family:inherit;
+  outline:none;transition:border-color .2s,box-shadow .2s,background .2s;}
+.n-in::placeholder{color:var(--c-faint);}
+.n-in:focus{border-color:var(--c-blue);box-shadow:0 0 0 4px var(--c-blue-soft);}
+
+/* theme toggle */
+.n-theme-toggle{width:38px;height:38px;border-radius:11px;border:1px solid var(--c-border-strong);
+  background:var(--c-surface);color:var(--c-text);cursor:pointer;display:inline-flex;align-items:center;
+  justify-content:center;transition:.25s;position:relative;overflow:hidden;}
+.n-theme-toggle:hover{border-color:var(--c-blue);box-shadow:0 0 0 4px var(--c-blue-soft);}
+.n-theme-toggle svg{transition:transform .45s cubic-bezier(.34,1.56,.64,1),opacity .3s;}
+
+/* skeleton shimmer */
+.n-skel{background:linear-gradient(90deg,var(--c-border) 25%,var(--c-border-strong) 37%,var(--c-border) 63%);
+  background-size:800px 100%;animation:nShimmer 1.4s linear infinite;border-radius:8px;}
+
+/* a11y: never leave entrance content hidden when motion is off / printing */
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition:none!important;}
+  html{scroll-behavior:auto;}
+  [style*="animation"],[class*="enter"],.n-skel{animation:none!important;opacity:1!important;transform:none!important;}
+}
+@media print{ *{animation:none!important;opacity:1!important;transform:none!important;} }
