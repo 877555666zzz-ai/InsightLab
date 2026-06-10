@@ -108,7 +108,7 @@
   --g-card:rgba(255,255,255,0.20);         /* frosted, lets color tint through */
   --g-strong:rgba(255,255,255,0.55);       /* denser pad under dense text */
   --g-border:rgba(255,255,255,0.65);       /* bright glass rim */
-  --g-rim-top:rgba(70,100,150,0.20);
+  --g-rim-top:rgba(255,255,255,0.95);
   --g-highlight:inset 0 1px 0 rgba(255,255,255,0.6);
   --g-blur:22px;
   --g-shadow:0 10px 34px rgba(30,30,60,0.13);
