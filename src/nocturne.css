@@ -239,3 +239,7 @@ body{
   [style*="animation"],[class*="enter"],.n-skel{animation:none!important;opacity:1!important;transform:none!important;}
 }
 @media print{ *{animation:none!important;opacity:1!important;transform:none!important;} }
+
+/* --- доп. поведение: карандаш редактирования стадии виден только при наведении --- */
+.il-pencil { opacity: 0; transition: opacity .15s; }
+.il-stagehead:hover .il-pencil { opacity: 1; }

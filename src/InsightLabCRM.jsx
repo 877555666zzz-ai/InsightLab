@@ -110,6 +110,12 @@ const todayISO = () => new Date().toISOString().slice(0, 10);
 const nowISO = () => new Date().toISOString();
 const fmtMoney = (n) =>
   (n || 0).toLocaleString("ru-RU") + " ₸";
+const plural = (n, one, few, many) => {
+  const m10 = n % 10, m100 = n % 100;
+  if (m10 === 1 && m100 !== 11) return one;
+  if (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20)) return few;
+  return many;
+};
 const fmtDate = (iso) => {
   if (!iso) return "—";
   const d = new Date(iso);
@@ -607,11 +613,6 @@ function Logo() {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10, color: C.text }}>
       <BrandMark height={22} />
-      <span style={{
-        fontSize: 9.5, color: C.faint, fontWeight: 700, letterSpacing: 1.6,
-        textTransform: "uppercase", padding: "2px 7px", borderRadius: 6,
-        background: C.panel, border: "1px solid " + C.border,
-      }}>CRM</span>
     </div>
   );
 }
@@ -818,10 +819,10 @@ function KanbanBoard({ stages, items, getStage, renderCard, onMove, sideStages, 
               onKeyDown={(e) => { if (e.key === "Enter") commitEdit(st); if (e.key === "Escape") setEditing(null); }}
               style={{ ...inputStyle, padding: "2px 6px", fontSize: 13, fontWeight: 700, height: 24 }} />
           ) : (
-            <div onClick={() => startEdit(st)} title="Переименовать"
+            <div onClick={() => startEdit(st)} title="Переименовать" className="il-stagehead"
               style={{ display: "flex", alignItems: "center", gap: 5, cursor: "text", minWidth: 0 }}>
               <span style={{ fontSize: 13, fontWeight: 700, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{stTitle(st)}</span>
-              <Pencil size={12} strokeWidth={1.8} style={{ color: C.faint, flexShrink: 0 }} />
+              <Pencil size={12} strokeWidth={1.8} className="il-pencil" style={{ color: C.faint, flexShrink: 0 }} />
             </div>
           )}
         </div>
@@ -860,12 +861,14 @@ function KanbanBoard({ stages, items, getStage, renderCard, onMove, sideStages, 
         })}
         {onAdd && !selMode && !q && (
           <button onClick={() => onAdd(st.id)} title="Добавить в эту стадию"
-            style={{ width: "100%", marginTop: 2, padding: "10px 12px", borderRadius: 12,
-              border: "1px dashed " + C.borderStrong, background: "transparent", color: C.muted,
+            style={{ width: "100%", marginTop: 2, padding: "11px 12px", borderRadius: 14,
+              border: "1px solid var(--g-border)", background: "var(--g-card)",
+              backdropFilter: "blur(var(--g-blur))", WebkitBackdropFilter: "blur(var(--g-blur))",
+              boxShadow: "var(--g-highlight), var(--g-shadow)", color: C.muted,
               cursor: "pointer", fontFamily: FONT, fontSize: 13, fontWeight: 600,
               display: "flex", alignItems: "center", justifyContent: "center", gap: 6, transition: "all .15s" }}
-            onMouseEnter={(e) => { e.currentTarget.style.borderColor = C.blue; e.currentTarget.style.color = C.blue; }}
-            onMouseLeave={(e) => { e.currentTarget.style.borderColor = C.borderStrong; e.currentTarget.style.color = C.muted; }}>
+            onMouseEnter={(e) => { e.currentTarget.style.color = C.blue; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = C.muted; }}>
             <Plus size={15} strokeWidth={2} /> Добавить
           </button>
         )}
@@ -2112,7 +2115,7 @@ function CRMApp({ onSignOut }) {
     const boardLeads = salesFilter === "active" ? _active : visibleLeads;
     content = (
       <>
-        <PageHead title="Воронка продаж" sub={isAdmin ? "Все лиды" : "Ваши лиды"}>
+        <PageHead title="Продажи" sub={"Воронка лидов · " + _active.length + " активных " + plural(_active.length, "сделка", "сделки", "сделок") + " на " + fmtMoney(pipeline)}>
           <div style={{ display: "inline-flex", padding: 3, borderRadius: 999, background: C.panel, border: "1px solid " + C.border, marginRight: 4 }}>
             {[["active", "Активные"], ["all", "Все"]].map(([v, lbl]) => (
               <button key={v} onClick={() => setSalesFilter(v)} style={{
