@@ -12,7 +12,7 @@ import NocturneBackground from "./components/NocturneBackground";
 import { ThemeProvider, ThemeToggle, useTheme } from "./components/theme";
 import BrandMark from "./components/Logo";
 import { BarChart3, Mic, Calendar, TrendingUp, Users, Settings, LayoutDashboard,
-  FolderOpen, CalendarDays, Bell, Coffee, CheckCircle2, FileText, Lightbulb } from "lucide-react";
+  FolderOpen, CalendarDays, Bell, Coffee, CheckCircle2, FileText, Lightbulb, Search, Pencil, Plus, MoreHorizontal } from "lucide-react";
 import "./nocturne.css";
 
 // ============================================================================
@@ -313,6 +313,11 @@ const inputStyle = {
   color: C.text, outline: "none", boxSizing: "border-box", background: C.panel,
   transition: "border-color .18s, box-shadow .18s",
 };
+const menuItemStyle = (danger) => ({
+  display: "block", width: "100%", textAlign: "left", padding: "9px 14px",
+  border: "none", background: "transparent", cursor: "pointer", fontFamily: FONT,
+  fontSize: 13, fontWeight: 600, color: danger ? C.red : C.text,
+});
 function Input(props) {
   return <input {...props} style={{ ...inputStyle, ...props.style }}
     onFocus={(e) => { e.target.style.borderColor = C.blue; e.target.style.boxShadow = "0 0 0 4px " + C.blueSoft; }}
@@ -731,16 +736,46 @@ function KanbanScroller({ children }) {
   );
 }
 
-function KanbanBoard({ stages, items, getStage, renderCard, onMove, sideStages, onDelete }) {
+function KanbanBoard({ stages, items, getStage, renderCard, onMove, sideStages, onDelete, boardId = "default" , onAdd }) {
   const [over, setOver] = useState(null);
   const [selMode, setSelMode] = useState(false);
   const [sel, setSel] = useState(() => new Set());
   const [moveTo, setMoveTo] = useState("");
-  const colItems = (sid) => items.filter((it) => getStage(it) === sid);
+  const [q, setQ] = useState("");
+  // --- редактирование стадий: название + цвет (по id, логика не затрагивается) ---
+  const METAKEY = "il_stagemeta_" + boardId;
+  const [meta, setMeta] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(METAKEY) || "{}"); } catch { return {}; }
+  });
+  const [editing, setEditing] = useState(null);
+  const [editVal, setEditVal] = useState("");
+  const [palette, setPalette] = useState(null);
+  const saveMeta = (next) => { setMeta(next); try { localStorage.setItem(METAKEY, JSON.stringify(next)); } catch {} };
+  const stTitle = (st) => (meta[st.id]?.title ?? st.title);
+  const stColor = (st, isSide) => (meta[st.id]?.color ?? (isSide ? C.amber : C.blue));
+  const startEdit = (st) => { setPalette(null); setEditing(st.id); setEditVal(stTitle(st)); };
+  const commitEdit = (st) => {
+    const v = editVal.trim();
+    const next = { ...meta, [st.id]: { ...(meta[st.id] || {}), title: v || st.title } };
+    saveMeta(next); setEditing(null);
+  };
+  const setColor = (st, color) => { saveMeta({ ...meta, [st.id]: { ...(meta[st.id] || {}), color } }); setPalette(null); };
+  const STAGE_COLORS = [C.blue, C.green, C.amber, C.red, "#9B51E0", "#6B7280"];
+
+  // поиск по компании/контакту/имени/телефону/email/должности
+  const matchQ = (it) => {
+    const s = q.trim().toLowerCase();
+    if (!s) return true;
+    return [it.company, it.contact, it.name, it.phone, it.email, it.title]
+      .filter(Boolean).some((v) => String(v).toLowerCase().includes(s));
+  };
+  const shown = items.filter(matchQ);
+  const nothingFound = q.trim() && shown.length === 0;
+  const colItems = (sid) => shown.filter((it) => getStage(it) === sid);
   const allStages = [...stages, ...(sideStages || [])];
 
   const toggle = (id) => setSel((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
-  const selectAll = () => setSel(new Set(items.map((it) => it.id)));
+  const selectAll = () => setSel(new Set(shown.map((it) => it.id)));
   const clearSel = () => { setSel(new Set()); setMoveTo(""); };
   const exitSel = () => { setSelMode(false); clearSel(); };
   const bulkMove = (sid) => { if (!sid) return; sel.forEach((id) => onMove(id, sid)); clearSel(); };
@@ -764,22 +799,45 @@ function KanbanBoard({ stages, items, getStage, renderCard, onMove, sideStages, 
       style={{
         minWidth: 264, width: 264, flexShrink: 0,
         background: over === st.id ? "var(--g-col-over)" : "var(--g-col)",
-        backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
         borderRadius: C.rTile, padding: 12,
-        border: "1px solid " + (over === st.id ? C.blue : C.border),
+        border: "1px solid " + (over === st.id ? C.blue : "var(--g-border)"),
+        backdropFilter: "blur(10px)", WebkitBackdropFilter: "blur(10px)",
         transition: "background .15s, border-color .15s",
         opacity: isSide ? 0.96 : 1,
       }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "4px 6px 14px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ width: 9, height: 9, borderRadius: 9, background: isSide ? C.amber : C.blue, boxShadow: "0 0 0 4px " + (isSide ? "color-mix(in srgb, " + C.amber + " 18%, transparent)" : C.blueSoft) }} />
-          <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{st.title}</span>
+      <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "4px 6px 14px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
+          <button onClick={() => setPalette(palette === st.id ? null : st.id)} title="Цвет стадии"
+            style={{ border: "none", background: "transparent", cursor: "pointer", padding: 0, lineHeight: 0, flexShrink: 0 }}>
+            <span style={{ display: "block", width: 9, height: 9, borderRadius: 9, background: stColor(st, isSide), boxShadow: "0 0 0 4px color-mix(in srgb, " + stColor(st, isSide) + " 18%, transparent)" }} />
+          </button>
+          {editing === st.id ? (
+            <input autoFocus value={editVal}
+              onChange={(e) => setEditVal(e.target.value)}
+              onBlur={() => commitEdit(st)}
+              onKeyDown={(e) => { if (e.key === "Enter") commitEdit(st); if (e.key === "Escape") setEditing(null); }}
+              style={{ ...inputStyle, padding: "2px 6px", fontSize: 13, fontWeight: 700, height: 24 }} />
+          ) : (
+            <div onClick={() => startEdit(st)} title="Переименовать"
+              style={{ display: "flex", alignItems: "center", gap: 5, cursor: "text", minWidth: 0 }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{stTitle(st)}</span>
+              <Pencil size={12} strokeWidth={1.8} style={{ color: C.faint, flexShrink: 0 }} />
+            </div>
+          )}
         </div>
-        <span style={{ fontSize: 11.5, fontWeight: 700, color: C.muted, background: C.surface, borderRadius: 999, padding: "2px 10px", border: "1px solid " + C.border }}>
+        <span style={{ fontSize: 11.5, fontWeight: 700, color: C.muted, background: C.surface, borderRadius: 999, padding: "2px 10px", border: "1px solid " + C.border, flexShrink: 0 }}>
           {colItems(st.id).length}
         </span>
+        {palette === st.id && (
+          <div onMouseLeave={() => setPalette(null)} style={{ position: "absolute", top: 28, left: 4, zIndex: 30, display: "flex", gap: 6, padding: 8, background: C.surface, border: "1px solid " + C.border, borderRadius: 10, boxShadow: C.shadowMd }}>
+            {STAGE_COLORS.map((c) => (
+              <button key={c} onClick={() => setColor(st, c)} title="Выбрать цвет"
+                style={{ width: 18, height: 18, borderRadius: 999, background: c, border: stColor(st, isSide) === c ? "2px solid " + C.text : "2px solid transparent", cursor: "pointer", padding: 0 }} />
+            ))}
+          </div>
+        )}
       </div>
-      <div style={{ minHeight: 40 }}>
+      <div style={{ minHeight: "calc(100vh - 320px)" }}>
         {colItems(st.id).map((it) => {
           const card = renderCard(it, (e) => e.dataTransfer.setData("id", it.id));
           if (!selMode) return card;
@@ -800,12 +858,31 @@ function KanbanBoard({ stages, items, getStage, renderCard, onMove, sideStages, 
             </div>
           );
         })}
+        {onAdd && !selMode && !q && (
+          <button onClick={() => onAdd(st.id)} title="Добавить в эту стадию"
+            style={{ width: "100%", marginTop: 2, padding: "10px 12px", borderRadius: 12,
+              border: "1px dashed " + C.borderStrong, background: "transparent", color: C.muted,
+              cursor: "pointer", fontFamily: FONT, fontSize: 13, fontWeight: 600,
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 6, transition: "all .15s" }}
+            onMouseEnter={(e) => { e.currentTarget.style.borderColor = C.blue; e.currentTarget.style.color = C.blue; }}
+            onMouseLeave={(e) => { e.currentTarget.style.borderColor = C.borderStrong; e.currentTarget.style.color = C.muted; }}>
+            <Plus size={15} strokeWidth={2} /> Добавить
+          </button>
+        )}
       </div>
     </div>
   );
   return (
     <div>
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
+        {/* Поиск по доске */}
+        <div style={{ position: "relative", flex: "0 1 280px", minWidth: 200 }}>
+          <span style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", display: "inline-flex", color: C.faint, pointerEvents: "none" }}>
+            <Search size={15} strokeWidth={1.9} />
+          </span>
+          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Поиск: компания, контакт, телефон…" style={{ paddingLeft: 33, paddingRight: q ? 30 : 11 }} />
+          {q && <button onClick={() => setQ("")} title="Очистить" style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", border: "none", background: "transparent", color: C.faint, cursor: "pointer", fontSize: 16, lineHeight: 1 }}>×</button>}
+        </div>
         {!selMode ? (
           <Btn variant="ghost" size="sm" onClick={() => setSelMode(true)}>☑ Выбрать</Btn>
         ) : (
@@ -821,12 +898,18 @@ function KanbanBoard({ stages, items, getStage, renderCard, onMove, sideStages, 
           </>
         )}
       </div>
-      <KanbanScroller>{stages.map((s) => Column(s, false))}</KanbanScroller>
-      {sideStages && (
-        <div style={{ marginTop: 16 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, marginBottom: 8 }}>Боковые статусы</div>
-          <KanbanScroller>{sideStages.map((s) => Column(s, true))}</KanbanScroller>
-        </div>
+      {nothingFound ? (
+        <EmptyState icon={<Search {...ES} />} title="Ничего не найдено" text={"По запросу «" + q.trim() + "» совпадений нет"} />
+      ) : (
+        <>
+          <KanbanScroller>{stages.map((s) => Column(s, false))}</KanbanScroller>
+          {sideStages && (
+            <div style={{ marginTop: 16 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, marginBottom: 8 }}>Боковые статусы</div>
+              <KanbanScroller>{sideStages.map((s) => Column(s, true))}</KanbanScroller>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
@@ -1133,7 +1216,7 @@ function ProjectView({ project, users, respondents, canEditScript, canConduct,
       {tab === "overview" && (
         projResp.length
           ? <KanbanBoard stages={RECRUIT_STAGES} items={projResp} getStage={(r) => r.stage}
-              renderCard={(r, ds) => RespCard(r, ds, () => onOpenResp(r))} onMove={onMoveResp} onDelete={onDeleteResp} />
+              renderCard={(r, ds) => RespCard(r, ds, () => onOpenResp(r))} onMove={onMoveResp} onDelete={onDeleteResp} boardId={"recruit_" + project.id} />
           : <EmptyState icon={<Users {...ES} />} title="Респондентов пока нет" text="Импортируйте список во вкладке «Импорт/Экспорт»." />
       )}
       {tab === "script" && <ScriptTab project={project} canEdit={canEditScript} onSaveScript={onSaveScript} />}
@@ -1830,6 +1913,8 @@ function CRMApp({ onSignOut }) {
   const [activeProject, setActiveProject] = useState(null); // id (admin drill-in / interviewer per-project)
   const [interviewMode, setInterviewMode] = useState(null); // {respId}
   const [importKind, setImportKind] = useState(null); // {kind, projectId?}
+  const [salesFilter, setSalesFilter] = useState("active"); // active | all
+  const [cardMenu, setCardMenu] = useState(null); // lead id with open menu
   const saveT = useRef(null);
 
   // загрузка
@@ -1987,7 +2072,20 @@ function CRMApp({ onSignOut }) {
   const leadCard = (l, ds) => (
     <KanbanCard key={l.id} onDragStart={ds} onClick={() => setOpenLead(l)}
       accent={l.stage === "won" ? C.green : l.stage === "lost" ? C.red : C.blue}>
-      <div style={{ fontWeight: 700, fontSize: 13.5 }}>{l.company}</div>
+      <div style={{ position: "relative", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+        <div style={{ fontWeight: 700, fontSize: 13.5, minWidth: 0 }}>{l.company}</div>
+        <button onClick={(e) => { e.stopPropagation(); setCardMenu(cardMenu === l.id ? null : l.id); }} title="Действия"
+          style={{ flexShrink: 0, width: 26, height: 26, borderRadius: 999, border: "1px solid " + C.border, background: C.surface, color: C.muted, cursor: "pointer", display: "grid", placeItems: "center", lineHeight: 0 }}>
+          <MoreHorizontal size={15} strokeWidth={2} />
+        </button>
+        {cardMenu === l.id && (
+          <div onClick={(e) => e.stopPropagation()} onMouseLeave={() => setCardMenu(null)}
+            style={{ position: "absolute", top: 30, right: 0, zIndex: 40, minWidth: 150, background: C.surface, border: "1px solid " + C.border, borderRadius: 10, boxShadow: C.shadowLg, overflow: "hidden" }}>
+            <button onClick={() => { setCardMenu(null); setOpenLead(l); }} style={menuItemStyle()}>Открыть</button>
+            <button onClick={() => { setCardMenu(null); if (confirm("Удалить лид «" + (l.company || "без названия") + "»?")) deleteLeads([l.id]); }} style={menuItemStyle(true)}>Удалить</button>
+          </div>
+        )}
+      </div>
       <div style={{ fontSize: 12, color: C.faint, marginTop: 2 }}>{l.contact} · {l.title}</div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8 }}>
         <Badge color={C.muted} bg={C.panel}>{l.source}</Badge>
@@ -2001,15 +2099,41 @@ function CRMApp({ onSignOut }) {
   let content = null;
 
   if (validPage === "sales") {
+    const addLeadToStage = (stage) => setOpenLead({ id: uid("lead"), company: "", contact: "", title: "", phone: "", email: "", source: "LinkedIn", stage: stage || "new", owner: userId, nextTouch: todayISO(), amount: 0, notes: "", history: [] });
+    // KPI по видимым лидам
+    const _won = visibleLeads.filter((l) => l.stage === "won");
+    const _lost = visibleLeads.filter((l) => l.stage === "lost");
+    const _active = visibleLeads.filter((l) => !["won", "lost"].includes(l.stage));
+    const winRate = _won.length + _lost.length ? Math.round((_won.length / (_won.length + _lost.length)) * 100) : 0;
+    const pipeline = _active.reduce((s, l) => s + (l.amount || 0), 0);
+    const closed = _won.reduce((s, l) => s + (l.amount || 0), 0);
+    const avgCheck = _won.length ? Math.round(closed / _won.length) : 0;
+    // фильтр Активные/Все
+    const boardLeads = salesFilter === "active" ? _active : visibleLeads;
     content = (
       <>
         <PageHead title="Воронка продаж" sub={isAdmin ? "Все лиды" : "Ваши лиды"}>
+          <div style={{ display: "inline-flex", padding: 3, borderRadius: 999, background: C.panel, border: "1px solid " + C.border, marginRight: 4 }}>
+            {[["active", "Активные"], ["all", "Все"]].map(([v, lbl]) => (
+              <button key={v} onClick={() => setSalesFilter(v)} style={{
+                border: "none", cursor: "pointer", fontFamily: FONT, fontSize: 13, fontWeight: 600,
+                padding: "5px 14px", borderRadius: 999,
+                background: salesFilter === v ? C.text : "transparent",
+                color: salesFilter === v ? C.bg : C.muted, transition: "all .15s" }}>{lbl}</button>
+            ))}
+          </div>
           <Btn variant="ghost" size="sm" onClick={() => exportLeads("csv")}>↓ CSV</Btn>
           <Btn variant="ghost" size="sm" onClick={() => exportLeads("xlsx")}>↓ XLSX</Btn>
           <Btn variant="ghost" size="sm" onClick={() => setImportKind({ kind: "lead" })}>↑ Импорт</Btn>
-          <Btn onClick={() => setOpenLead({ id: uid("lead"), company: "", contact: "", title: "", phone: "", email: "", source: "LinkedIn", stage: "new", owner: userId, nextTouch: todayISO(), amount: 0, notes: "", history: [] })}>+ Лид</Btn>
+          <Btn onClick={() => addLeadToStage("new")}>+ Лид</Btn>
         </PageHead>
-        <KanbanBoard stages={SALES_STAGES} items={visibleLeads} getStage={(l) => l.stage} renderCard={leadCard} onMove={moveLead} onDelete={deleteLeads} />
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 14, marginBottom: 20 }}>
+          <StatCard label="Win-rate" value={winRate + "%"} sub={_won.length + " выиграно / " + _lost.length + " проиграно"} accent={C.green} />
+          <StatCard label="Пайплайн" value={fmtMoney(pipeline)} sub="в активных стадиях" />
+          <StatCard label="Закрытая выручка" value={fmtMoney(closed)} accent={C.blue} />
+          <StatCard label="Средний чек" value={fmtMoney(avgCheck)} sub="по выигранным" />
+        </div>
+        <KanbanBoard stages={SALES_STAGES} items={boardLeads} getStage={(l) => l.stage} renderCard={leadCard} onMove={moveLead} onDelete={deleteLeads} boardId="sales" onAdd={addLeadToStage} />
       </>
     );
   }
@@ -2084,7 +2208,7 @@ function CRMApp({ onSignOut }) {
         Выйти
       </button>
       <Header user={user} users={isAdmin ? db.users : [user]} onSwitchUser={switchUser} nav={nav} current={validPage} onNav={(p) => { setPage(p); setActiveProject(null); }} />
-      <main style={{ maxWidth: 1280, margin: "0 auto", padding: "26px 24px 80px" }}>{content}</main>
+      <main style={{ maxWidth: ["sales", "recruit", "workspace"].includes(validPage) ? 1700 : 1280, margin: "0 auto", padding: "26px 32px 80px", transition: "max-width .2s" }}>{content}</main>
 
       {/* Модалки */}
       {openLead && (
