@@ -47,15 +47,15 @@
   --c-glass-blur:18px;
   --c-on-accent:#04101c;                   /* text on blue/green buttons */
   /* ---- TRUE GLASS (transparent cards on colored blobs) ---- */
-  --g-card:rgba(28,36,54,0.82);            /* elevated dark card (как в макете) */
-  --g-strong:rgba(20,28,44,0.7);           /* denser pad under dense text */
-  --g-border:rgba(255,255,255,0.10);       /* subtle rim */
-  --g-highlight:inset 0 1px 0 rgba(255,255,255,0.08);
-  --g-blur:16px;
-  --g-shadow:0 8px 24px rgba(0,0,0,0.40);
-  --g-shadow-hi:0 16px 40px rgba(0,0,0,0.55);
-  --g-col:rgba(255,255,255,0.05);          /* колонки — мягкое читаемое стекло */
-  --g-col-over:rgba(45,156,219,0.14);      /* подсветка при перетаскивании */
+  --g-card:rgba(255,255,255,0.06);         /* card fill — very transparent */
+  --g-strong:rgba(20,28,44,0.55);          /* denser pad under dense text */
+  --g-border:rgba(255,255,255,0.16);       /* bright glass rim */
+  --g-highlight:inset 0 1px 0 rgba(255,255,255,0.12);
+  --g-blur:28px;
+  --g-shadow:0 8px 32px rgba(0,0,0,0.45);
+  --g-shadow-hi:0 16px 44px rgba(0,0,0,0.58);
+  --g-col:rgba(255,255,255,0.03);          /* kanban column tint */
+  --g-col-over:rgba(45,156,219,0.12);      /* column drop-hover */
   /* colored blobs visible through the glass */
   --c-blobs:
     radial-gradient(48% 44% at 12% 16%, rgba(91,91,255,0.22), transparent 70%),
@@ -102,15 +102,15 @@
   --c-glass-blur:14px;
   --c-on-accent:#FFFFFF;
   /* ---- TRUE GLASS (transparent cards on colored blobs) ---- */
-  --g-card:rgba(255,255,255,0.92);         /* crisp white card (как в макете) */
-  --g-strong:rgba(255,255,255,0.97);       /* denser pad under dense text */
-  --g-border:rgba(45,80,120,0.10);         /* subtle rim */
-  --g-highlight:inset 0 1px 0 rgba(255,255,255,0.8);
-  --g-blur:14px;
-  --g-shadow:0 6px 20px rgba(30,40,70,0.08);
-  --g-shadow-hi:0 14px 36px rgba(30,40,70,0.14);
-  --g-col:rgba(255,255,255,0.42);          /* колонки — мягкое читаемое стекло */
-  --g-col-over:rgba(91,91,255,0.12);       /* подсветка при перетаскивании */
+  --g-card:rgba(255,255,255,0.16);         /* card fill — see-through */
+  --g-strong:rgba(255,255,255,0.42);       /* denser pad under dense text */
+  --g-border:rgba(255,255,255,0.6);        /* bright glass rim */
+  --g-highlight:inset 0 1px 0 rgba(255,255,255,0.5);
+  --g-blur:28px;
+  --g-shadow:0 8px 32px rgba(30,30,60,0.12);
+  --g-shadow-hi:0 16px 44px rgba(30,30,60,0.18);
+  --g-col:rgba(255,255,255,0.10);          /* kanban column tint */
+  --g-col-over:rgba(91,91,255,0.10);       /* column drop-hover */
   /* colored blobs visible through the glass */
   --c-blobs:
     radial-gradient(48% 44% at 12% 16%, rgba(91,91,255,0.16), transparent 70%),
