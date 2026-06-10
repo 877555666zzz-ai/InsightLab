@@ -11,8 +11,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import NocturneBackground from "./components/NocturneBackground";
 import { ThemeProvider, ThemeToggle, useTheme } from "./components/theme";
 import BrandMark from "./components/Logo";
-import { BarChart3, Mic, Calendar, TrendingUp, Users, Settings, LayoutDashboard,
-  FolderOpen, CalendarDays, Bell, Coffee, CheckCircle2, FileText, Lightbulb, Search, Pencil, Plus, MoreHorizontal } from "lucide-react";
 import "./nocturne.css";
 
 // ============================================================================
@@ -110,12 +108,6 @@ const todayISO = () => new Date().toISOString().slice(0, 10);
 const nowISO = () => new Date().toISOString();
 const fmtMoney = (n) =>
   (n || 0).toLocaleString("ru-RU") + " ₸";
-const plural = (n, one, few, many) => {
-  const m10 = n % 10, m100 = n % 100;
-  if (m10 === 1 && m100 !== 11) return one;
-  if (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20)) return few;
-  return many;
-};
 const fmtDate = (iso) => {
   if (!iso) return "—";
   const d = new Date(iso);
@@ -319,11 +311,6 @@ const inputStyle = {
   color: C.text, outline: "none", boxSizing: "border-box", background: C.panel,
   transition: "border-color .18s, box-shadow .18s",
 };
-const menuItemStyle = (danger) => ({
-  display: "block", width: "100%", textAlign: "left", padding: "9px 14px",
-  border: "none", background: "transparent", cursor: "pointer", fontFamily: FONT,
-  fontSize: 13, fontWeight: 600, color: danger ? C.red : C.text,
-});
 function Input(props) {
   return <input {...props} style={{ ...inputStyle, ...props.style }}
     onFocus={(e) => { e.target.style.borderColor = C.blue; e.target.style.boxShadow = "0 0 0 4px " + C.blueSoft; }}
@@ -397,18 +384,12 @@ function StatCard({ label, value, sub, accent }) {
 function EmptyState({ icon, title, text }) {
   return (
     <div style={{ textAlign: "center", padding: "48px 20px", color: C.faint }}>
-      <div style={{
-        width: 64, height: 64, borderRadius: 999, margin: "0 auto 14px",
-        display: "grid", placeItems: "center",
-        background: "var(--g-col, " + C.panel + ")", border: "1px solid " + C.border,
-        color: C.muted,
-      }}>{icon}</div>
+      <div style={{ fontSize: 34, marginBottom: 10 }}>{icon}</div>
       <div style={{ fontWeight: 700, color: C.muted, marginBottom: 4 }}>{title}</div>
       {text && <div style={{ fontSize: 13 }}>{text}</div>}
     </div>
   );
 }
-const ES = { size: 26, strokeWidth: 1.6 };
 
 // ============================================================================
 // SECTION: seed
@@ -613,21 +594,27 @@ function Logo() {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10, color: C.text }}>
       <BrandMark height={22} />
+      <span style={{
+        fontSize: 9.5, color: C.faint, fontWeight: 700, letterSpacing: 1.6,
+        textTransform: "uppercase", padding: "2px 7px", borderRadius: 6,
+        background: C.panel, border: "1px solid " + C.border,
+      }}>CRM</span>
     </div>
   );
 }
 
 // ---------- Header с переключателем роли (демонстрация 3 интерфейсов) ----------
-function Header({ user, users, onSwitchUser, nav, current, onNav }) {
+function Header({ user, users, onSwitchUser, nav, current, onNav, query, setQuery }) {
+  const initials = (user.name || "?").split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
   return (
     <header style={{
       background: C.glass, backdropFilter: "blur(18px) saturate(140%)", WebkitBackdropFilter: "blur(18px) saturate(140%)",
       borderBottom: "1px solid " + C.glassBorder,
       padding: "0 24px", display: "flex", alignItems: "center",
-      gap: 24, height: 64, position: "sticky", top: 0, zIndex: 50,
+      gap: 18, height: 64, position: "sticky", top: 0, zIndex: 50,
     }}>
-      <Logo />
-      <nav style={{ display: "flex", gap: 3, flex: 1, overflowX: "auto" }}>
+      <div style={{ color: C.text, flexShrink: 0 }}><Logo height={22} /></div>
+      <nav style={{ display: "flex", gap: 3, overflowX: "auto" }}>
         {nav.map((n) => (
           <button key={n.id} onClick={() => onNav(n.id)} style={{
             border: "none", background: current === n.id ? C.blueLight : "transparent",
@@ -635,28 +622,47 @@ function Header({ user, users, onSwitchUser, nav, current, onNav }) {
             padding: "9px 14px", borderRadius: 999, cursor: "pointer", fontFamily: FONT,
             whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 6, transition: "all .18s",
           }}>
-            <span style={{ display: "inline-flex", alignItems: "center" }}>{n.icon}</span>{n.label}
+            <span>{n.icon}</span>{n.label}
           </button>
         ))}
       </nav>
+      <div style={{ flex: 1 }} />
+      {current === "sales" && setQuery && (
+        <div style={{
+          display: "flex", alignItems: "center", gap: 8, padding: "9px 14px", borderRadius: 999,
+          background: C.surface, border: "1px solid " + C.border, minWidth: 210, maxWidth: 260,
+        }}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={C.faint} strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.5" y2="16.5" /></svg>
+          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Поиск по лидам…"
+            style={{ border: "none", outline: "none", background: "transparent", fontFamily: FONT, fontSize: 13, color: C.text, width: "100%" }} />
+        </div>
+      )}
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         <ThemeToggle />
-        <div style={{ textAlign: "right", lineHeight: 1.2 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{user.name}</div>
-          <div style={{ fontSize: 11, color: C.faint }}>{ROLES[user.role]}</div>
+        <button title="Уведомления" style={{
+          width: 40, height: 40, borderRadius: "50%", border: "1px solid " + C.borderStrong, background: C.surface,
+          color: C.muted, cursor: "pointer", display: "inline-grid", placeItems: "center", position: "relative", flexShrink: 0,
+        }}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.7 21a2 2 0 0 1-3.4 0" /></svg>
+          <span style={{ position: "absolute", top: 9, right: 10, width: 7, height: 7, borderRadius: 7, background: C.amber, boxShadow: "0 0 0 2px " + C.glass }} />
+        </button>
+        {/* аватар = переключатель роли (прозрачный select поверх), логика сохранена */}
+        <div title={user.name + " · " + ROLES[user.role]} style={{ position: "relative", width: 40, height: 40, flexShrink: 0 }}>
+          <div style={{
+            width: 40, height: 40, borderRadius: "50%", display: "grid", placeItems: "center",
+            fontSize: 13.5, fontWeight: 700, color: "#fff", letterSpacing: 0.3,
+            background: "linear-gradient(140deg,#5B5BFF,#7A7AFF)",
+            boxShadow: "0 4px 12px -3px rgba(45,45,90,0.45), inset 0 1px 0 rgba(255,255,255,0.35)",
+          }}>{initials}</div>
+          {users.length > 1 && (
+            <select value={user.id} onChange={(e) => onSwitchUser(e.target.value)} title="Переключить роль (демо)"
+              style={{ position: "absolute", inset: 0, width: "100%", height: "100%", opacity: 0, cursor: "pointer", border: "none", borderRadius: "50%" }}>
+              {users.filter((u) => u.active).map((u) => (
+                <option key={u.id} value={u.id}>{ROLES[u.role]} — {u.name}</option>
+              ))}
+            </select>
+          )}
         </div>
-        <select
-          value={user.id}
-          onChange={(e) => onSwitchUser(e.target.value)}
-          title="Переключить роль (демо)"
-          style={{
-            border: "1px solid " + C.border, borderRadius: 10, padding: "8px 10px",
-            fontFamily: FONT, fontSize: 12.5, color: C.muted, cursor: "pointer", background: C.surface,
-          }}>
-          {users.filter((u) => u.active).map((u) => (
-            <option key={u.id} value={u.id}>{ROLES[u.role]} — {u.name}</option>
-          ))}
-        </select>
       </div>
     </header>
   );
@@ -667,6 +673,7 @@ function KanbanCard({ children, onDragStart, onClick, accent }) {
   const ac = accent || C.blue;
   return (
     <div
+      className="kanban-card"
       draggable
       onDragStart={onDragStart}
       onClick={onClick}
@@ -684,235 +691,63 @@ function KanbanCard({ children, onDragStart, onClick, accent }) {
   );
 }
 
-// Горизонтальная лента колонок: стрелки по бокам + автопрокрутка при
-// перетаскивании карточки к краю.
-function KanbanScroller({ children }) {
-  const ref = useRef(null);
-  const raf = useRef(null);
-  const dir = useRef(0);
-  const [canL, setCanL] = useState(false);
-  const [canR, setCanR] = useState(false);
-  const refresh = () => {
-    const el = ref.current; if (!el) return;
-    setCanL(el.scrollLeft > 4);
-    setCanR(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
-  };
-  useEffect(() => {
-    refresh();
-    const onUp = () => { dir.current = 0; };
-    window.addEventListener("dragend", onUp);
-    window.addEventListener("drop", onUp);
-    return () => { window.removeEventListener("dragend", onUp); window.removeEventListener("drop", onUp); if (raf.current) cancelAnimationFrame(raf.current); };
-  }, []);
-  const loop = () => {
-    const el = ref.current;
-    if (el && dir.current) { el.scrollLeft += dir.current * 16; refresh(); raf.current = requestAnimationFrame(loop); }
-    else { raf.current = null; }
-  };
-  const onDragOver = (e) => {
-    const el = ref.current; if (!el) return;
-    const r = el.getBoundingClientRect();
-    const x = e.clientX - r.left, edge = 90;
-    dir.current = x < edge ? -1 : x > r.width - edge ? 1 : 0;
-    if (dir.current && !raf.current) raf.current = requestAnimationFrame(loop);
-  };
-  const arrow = (d) => () => { ref.current?.scrollBy({ left: d * 320, behavior: "smooth" }); setTimeout(refresh, 350); };
-  const arrowBtn = (d, show) => (
-    <button onClick={arrow(d)} disabled={!show} style={{
-      flexShrink: 0, width: 34, height: 34, alignSelf: "center", borderRadius: 999,
-      border: "1px solid " + C.border, background: C.surface, color: show ? C.text : C.faint,
-      cursor: show ? "pointer" : "default", opacity: show ? 1 : 0.4, fontSize: 16, lineHeight: 1,
-      boxShadow: C.shadow, transition: "opacity .15s",
-    }}>{d < 0 ? "‹" : "›"}</button>
-  );
-  return (
-    <div style={{ display: "flex", gap: 8, alignItems: "stretch" }}>
-      {arrowBtn(-1, canL)}
-      <div ref={ref} onDragOver={onDragOver} onScroll={refresh}
-        style={{ display: "flex", gap: 16, overflowX: "auto", paddingBottom: 8, flex: 1, scrollBehavior: "smooth" }}>
-        {children}
-      </div>
-      {arrowBtn(1, canR)}
-    </div>
-  );
-}
-
-function KanbanBoard({ stages, items, getStage, renderCard, onMove, sideStages, onDelete, boardId = "default" , onAdd }) {
+function KanbanBoard({ stages, items, getStage, renderCard, onMove, sideStages, dotColor, onAddToStage }) {
   const [over, setOver] = useState(null);
-  const [selMode, setSelMode] = useState(false);
-  const [sel, setSel] = useState(() => new Set());
-  const [moveTo, setMoveTo] = useState("");
-  const [q, setQ] = useState("");
-  // --- редактирование стадий: название + цвет (по id, логика не затрагивается) ---
-  const METAKEY = "il_stagemeta_" + boardId;
-  const [meta, setMeta] = useState(() => {
-    try { return JSON.parse(localStorage.getItem(METAKEY) || "{}"); } catch { return {}; }
-  });
-  const [editing, setEditing] = useState(null);
-  const [editVal, setEditVal] = useState("");
-  const [palette, setPalette] = useState(null);
-  const saveMeta = (next) => { setMeta(next); try { localStorage.setItem(METAKEY, JSON.stringify(next)); } catch {} };
-  const stTitle = (st) => (meta[st.id]?.title ?? st.title);
-  const stColor = (st, isSide) => (meta[st.id]?.color ?? (isSide ? C.amber : C.blue));
-  const startEdit = (st) => { setPalette(null); setEditing(st.id); setEditVal(stTitle(st)); };
-  const commitEdit = (st) => {
-    const v = editVal.trim();
-    const next = { ...meta, [st.id]: { ...(meta[st.id] || {}), title: v || st.title } };
-    saveMeta(next); setEditing(null);
-  };
-  const setColor = (st, color) => { saveMeta({ ...meta, [st.id]: { ...(meta[st.id] || {}), color } }); setPalette(null); };
-  const STAGE_COLORS = [C.blue, C.green, C.amber, C.red, "#9B51E0", "#6B7280"];
-
-  // поиск по компании/контакту/имени/телефону/email/должности
-  const matchQ = (it) => {
-    const s = q.trim().toLowerCase();
-    if (!s) return true;
-    return [it.company, it.contact, it.name, it.phone, it.email, it.title]
-      .filter(Boolean).some((v) => String(v).toLowerCase().includes(s));
-  };
-  const shown = items.filter(matchQ);
-  const nothingFound = q.trim() && shown.length === 0;
-  const colItems = (sid) => shown.filter((it) => getStage(it) === sid);
-  const allStages = [...stages, ...(sideStages || [])];
-
-  const toggle = (id) => setSel((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
-  const selectAll = () => setSel(new Set(shown.map((it) => it.id)));
-  const clearSel = () => { setSel(new Set()); setMoveTo(""); };
-  const exitSel = () => { setSelMode(false); clearSel(); };
-  const bulkMove = (sid) => { if (!sid) return; sel.forEach((id) => onMove(id, sid)); clearSel(); };
-  const bulkDelete = () => {
-    if (!sel.size) return;
-    if (!confirm("Удалить выбранные карточки (" + sel.size + ")? Действие необратимо.")) return;
-    onDelete && onDelete([...sel]); clearSel();
-  };
-
+  const colItems = (sid) => items.filter((it) => getStage(it) === sid);
   const onDrop = (sid) => (e) => {
     e.preventDefault();
     const id = e.dataTransfer.getData("id");
     if (id) onMove(id, sid);
     setOver(null);
   };
-  const Column = (st, isSide) => (
+  const Column = (st, isSide) => {
+    const dc = dotColor ? dotColor(st.id) : (isSide ? C.amber : C.blue);
+    return (
     <div key={st.id}
       onDragOver={(e) => { e.preventDefault(); setOver(st.id); }}
       onDragLeave={() => setOver((o) => (o === st.id ? null : o))}
       onDrop={onDrop(st.id)}
-      style={{
-        minWidth: 264, width: 264, flexShrink: 0,
-        background: over === st.id ? "var(--g-col-over)" : "var(--g-col)",
-        borderRadius: C.rTile, padding: 12,
-        border: "1px solid " + (over === st.id ? C.blue : "var(--g-border)"),
-        backdropFilter: "blur(10px)", WebkitBackdropFilter: "blur(10px)",
-        transition: "background .15s, border-color .15s",
-        opacity: isSide ? 0.96 : 1,
-      }}>
-      <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "4px 6px 14px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
-          <button onClick={() => setPalette(palette === st.id ? null : st.id)} title="Цвет стадии"
-            style={{ border: "none", background: "transparent", cursor: "pointer", padding: 0, lineHeight: 0, flexShrink: 0 }}>
-            <span style={{ display: "block", width: 9, height: 9, borderRadius: 9, background: stColor(st, isSide), boxShadow: "0 0 0 4px color-mix(in srgb, " + stColor(st, isSide) + " 18%, transparent)" }} />
-          </button>
-          {editing === st.id ? (
-            <input autoFocus value={editVal}
-              onChange={(e) => setEditVal(e.target.value)}
-              onBlur={() => commitEdit(st)}
-              onKeyDown={(e) => { if (e.key === "Enter") commitEdit(st); if (e.key === "Escape") setEditing(null); }}
-              style={{ ...inputStyle, padding: "2px 6px", fontSize: 13, fontWeight: 700, height: 24 }} />
-          ) : (
-            <div onClick={() => startEdit(st)} title="Переименовать" className="il-stagehead"
-              style={{ display: "flex", alignItems: "center", gap: 5, cursor: "text", minWidth: 0 }}>
-              <span style={{ fontSize: 13, fontWeight: 700, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{stTitle(st)}</span>
-              <Pencil size={12} strokeWidth={1.8} className="il-pencil" style={{ color: C.faint, flexShrink: 0 }} />
-            </div>
-          )}
+      style={{ minWidth: 268, width: 268, flexShrink: 0, opacity: isSide ? 0.96 : 1 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "2px 6px 12px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+          <span style={{ width: 9, height: 9, borderRadius: 9, background: dc, boxShadow: "0 0 0 4px color-mix(in srgb, " + dc + " 16%, transparent)" }} />
+          <span style={{ fontSize: 13.5, fontWeight: 700, color: C.text }}>{st.title}</span>
         </div>
-        <span style={{ fontSize: 11.5, fontWeight: 700, color: C.muted, background: C.surface, borderRadius: 999, padding: "2px 10px", border: "1px solid " + C.border, flexShrink: 0 }}>
+        <span style={{ fontSize: 11.5, fontWeight: 700, color: C.muted, background: "var(--g-col)", borderRadius: 999, padding: "2px 10px", border: "1px solid var(--g-col-border)" }}>
           {colItems(st.id).length}
         </span>
-        {palette === st.id && (
-          <div onMouseLeave={() => setPalette(null)} style={{ position: "absolute", top: 28, left: 4, zIndex: 30, display: "flex", gap: 6, padding: 8, background: C.surface, border: "1px solid " + C.border, borderRadius: 10, boxShadow: C.shadowMd }}>
-            {STAGE_COLORS.map((c) => (
-              <button key={c} onClick={() => setColor(st, c)} title="Выбрать цвет"
-                style={{ width: 18, height: 18, borderRadius: 999, background: c, border: stColor(st, isSide) === c ? "2px solid " + C.text : "2px solid transparent", cursor: "pointer", padding: 0 }} />
-            ))}
-          </div>
-        )}
       </div>
-      <div style={{ minHeight: "calc(100vh - 320px)" }}>
-        {colItems(st.id).map((it) => {
-          const card = renderCard(it, (e) => e.dataTransfer.setData("id", it.id));
-          if (!selMode) return card;
-          const isSel = sel.has(it.id);
-          return (
-            <div key={it.id} style={{ position: "relative" }}>
-              {card}
-              <div onClick={(e) => { e.stopPropagation(); toggle(it.id); }}
-                style={{ position: "absolute", inset: 0, borderRadius: 16, cursor: "pointer",
-                  background: isSel ? "color-mix(in srgb, " + C.blue + " 14%, transparent)" : "transparent",
-                  border: "2px solid " + (isSel ? C.blue : "transparent"), marginBottom: 12 }}>
-                <span style={{ position: "absolute", top: 10, right: 10, width: 22, height: 22, borderRadius: 6,
-                  border: "2px solid " + (isSel ? C.blue : C.borderStrong), background: isSel ? C.blue : C.surface,
-                  color: "#fff", display: "grid", placeItems: "center", fontSize: 14, fontWeight: 800 }}>
-                  {isSel ? "✓" : ""}
-                </span>
-              </div>
-            </div>
-          );
-        })}
-        {onAdd && !selMode && !q && (
-          <button onClick={() => onAdd(st.id)} title="Добавить в эту стадию"
-            style={{ width: "100%", marginTop: 2, padding: "11px 12px", borderRadius: 14,
-              border: "1px solid var(--g-border)", background: "var(--g-card)",
-              backdropFilter: "blur(var(--g-blur))", WebkitBackdropFilter: "blur(var(--g-blur))",
-              boxShadow: "var(--g-highlight), var(--g-shadow)", color: C.muted,
-              cursor: "pointer", fontFamily: FONT, fontSize: 13, fontWeight: 600,
-              display: "flex", alignItems: "center", justifyContent: "center", gap: 6, transition: "all .15s" }}
-            onMouseEnter={(e) => { e.currentTarget.style.color = C.blue; }}
-            onMouseLeave={(e) => { e.currentTarget.style.color = C.muted; }}>
-            <Plus size={15} strokeWidth={2} /> Добавить
+      <div style={{
+        minHeight: 46, borderRadius: C.rTile, padding: over === st.id ? 8 : 0,
+        background: over === st.id ? "var(--g-col-over)" : "transparent",
+        outline: over === st.id ? "1.5px dashed " + C.blue : "1.5px dashed transparent",
+        transition: "background .15s, outline-color .15s, padding .15s",
+      }}>
+        {colItems(st.id).map((it) =>
+          renderCard(it, (e) => e.dataTransfer.setData("id", it.id))
+        )}
+        {onAddToStage && (
+          <button onClick={() => onAddToStage(st.id)} className="add-plate" style={{ marginTop: 2 }}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+            Добавить
           </button>
         )}
       </div>
     </div>
-  );
+    );
+  };
   return (
     <div>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
-        {/* Поиск по доске */}
-        <div style={{ position: "relative", flex: "0 1 280px", minWidth: 200 }}>
-          <span style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", display: "inline-flex", color: C.faint, pointerEvents: "none" }}>
-            <Search size={15} strokeWidth={1.9} />
-          </span>
-          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Поиск: компания, контакт, телефон…" style={{ paddingLeft: 33, paddingRight: q ? 30 : 11 }} />
-          {q && <button onClick={() => setQ("")} title="Очистить" style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", border: "none", background: "transparent", color: C.faint, cursor: "pointer", fontSize: 16, lineHeight: 1 }}>×</button>}
-        </div>
-        {!selMode ? (
-          <Btn variant="ghost" size="sm" onClick={() => setSelMode(true)}>☑ Выбрать</Btn>
-        ) : (
-          <>
-            <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Выбрано: {sel.size}</span>
-            <Btn variant="ghost" size="sm" onClick={selectAll}>Выбрать все</Btn>
-            <Btn variant="ghost" size="sm" onClick={clearSel}>Снять</Btn>
-            <Select value={moveTo} onChange={(e) => { bulkMove(e.target.value); }}
-              options={[{ value: "", label: "Перенести в…" }, ...allStages.map((s) => ({ value: s.id, label: s.title }))]}
-              style={{ width: 200 }} disabled={!sel.size} />
-            {onDelete && <Btn variant="danger" size="sm" onClick={bulkDelete} disabled={!sel.size}>Удалить ({sel.size})</Btn>}
-            <Btn variant="plain" size="sm" onClick={exitSel}>✕ Выход</Btn>
-          </>
-        )}
+      <div style={{ display: "flex", gap: 16, overflowX: "auto", paddingBottom: 8 }}>
+        {stages.map((s) => Column(s, false))}
       </div>
-      {nothingFound ? (
-        <EmptyState icon={<Search {...ES} />} title="Ничего не найдено" text={"По запросу «" + q.trim() + "» совпадений нет"} />
-      ) : (
-        <>
-          <KanbanScroller>{stages.map((s) => Column(s, false))}</KanbanScroller>
-          {sideStages && (
-            <div style={{ marginTop: 16 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, marginBottom: 8 }}>Боковые статусы</div>
-              <KanbanScroller>{sideStages.map((s) => Column(s, true))}</KanbanScroller>
-            </div>
-          )}
-        </>
+      {sideStages && (
+        <div style={{ marginTop: 16 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, marginBottom: 8 }}>Боковые статусы</div>
+          <div style={{ display: "flex", gap: 16, overflowX: "auto", paddingBottom: 8 }}>
+            {sideStages.map((s) => Column(s, true))}
+          </div>
+        </div>
       )}
     </div>
   );
@@ -1109,7 +944,7 @@ function ScriptTab({ project, canEdit, onSaveScript }) {
       )}
 
       {preview.length === 0 ? (
-        <EmptyState icon={<FileText {...ES} />} title="Скрипт ещё не загружен" text="Вставьте текст вопросов — система разобьёт его на слайды." />
+        <EmptyState icon="📝" title="Скрипт ещё не загружен" text="Вставьте текст вопросов — система разобьёт его на слайды." />
       ) : (
         <>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
@@ -1137,7 +972,7 @@ function ScriptTab({ project, canEdit, onSaveScript }) {
                 {canEdit
                   ? <Select value={b.type} options={Object.entries(BLOCK_TYPE_LABEL).map(([v, l]) => ({ value: v, label: l }))} onChange={(e) => retype(i, e.target.value)} style={{ marginBottom: 10, fontSize: 12 }} />
                   : <Badge style={{ marginBottom: 10 }}>{BLOCK_TYPE_LABEL[b.type]}</Badge>}
-                {b.hint && <div style={{ fontSize: 12, color: C.amber, background: C.hintBg, padding: "6px 9px", borderRadius: 7, marginBottom: 8, display: "flex", gap: 6, alignItems: "flex-start" }}><Lightbulb size={13} strokeWidth={1.8} style={{ flexShrink: 0, marginTop: 1 }} /> {b.hint}</div>}
+                {b.hint && <div style={{ fontSize: 12, color: C.amber, background: C.hintBg, padding: "6px 9px", borderRadius: 7, marginBottom: 8 }}>💡 {b.hint}</div>}
                 <ol style={{ margin: 0, paddingLeft: 18, color: C.text }}>
                   {b.questions.map((q, qi) => <li key={qi} style={{ fontSize: 13, marginBottom: 4, lineHeight: 1.45 }}>{q}</li>)}
                 </ol>
@@ -1166,14 +1001,14 @@ function RespCard(resp, onDragStart, onClick) {
         {resp.insight && <Badge color={C.green} bg="#E7F6EE">★ инсайт</Badge>}
       </div>
       <div style={{ fontSize: 12, color: C.faint, marginTop: 2 }}>{resp.phone}</div>
-      {resp.slot && <div style={{ fontSize: 11.5, color: C.blueDark, marginTop: 6, display: "flex", alignItems: "center", gap: 5 }}><Calendar size={12} strokeWidth={1.9} /> {fmtDateTime(resp.slot)}</div>}
+      {resp.slot && <div style={{ fontSize: 11.5, color: C.blueDark, marginTop: 6 }}>🗓 {fmtDateTime(resp.slot)}</div>}
     </KanbanCard>
   );
 }
 
 // ---------- ProjectView (вид по одному проекту, 3.5б) ----------
 function ProjectView({ project, users, respondents, canEditScript, canConduct,
-  onMoveResp, onOpenResp, onSaveScript, onBack, onDeleteResp }) {
+  onMoveResp, onOpenResp, onSaveScript, onBack }) {
   const [tab, setTab] = useState("overview");
   const projResp = respondents.filter((r) => r.project === project.id);
   const doneCount = projResp.filter((r) => r.stage === "done" || r.stage === "insight").length;
@@ -1219,8 +1054,8 @@ function ProjectView({ project, users, respondents, canEditScript, canConduct,
       {tab === "overview" && (
         projResp.length
           ? <KanbanBoard stages={RECRUIT_STAGES} items={projResp} getStage={(r) => r.stage}
-              renderCard={(r, ds) => RespCard(r, ds, () => onOpenResp(r))} onMove={onMoveResp} onDelete={onDeleteResp} boardId={"recruit_" + project.id} />
-          : <EmptyState icon={<Users {...ES} />} title="Респондентов пока нет" text="Импортируйте список во вкладке «Импорт/Экспорт»." />
+              renderCard={(r, ds) => RespCard(r, ds, () => onOpenResp(r))} onMove={onMoveResp} />
+          : <EmptyState icon="👥" title="Респондентов пока нет" text="Импортируйте список во вкладке «Импорт/Экспорт»." />
       )}
       {tab === "script" && <ScriptTab project={project} canEdit={canEditScript} onSaveScript={onSaveScript} />}
       {tab === "schedule" && (
@@ -1235,7 +1070,7 @@ function ProjectView({ project, users, respondents, canEditScript, canConduct,
                 <Btn size="sm" onClick={() => onOpenResp(r)}>Открыть</Btn>}
             </Panel>
           ))}
-          {!projResp.some((r) => r.slot) && <EmptyState icon={<CalendarDays {...ES} />} title="Слотов пока нет" />}
+          {!projResp.some((r) => r.slot) && <EmptyState icon="🗓" title="Слотов пока нет" />}
         </div>
       )}
     </div>
@@ -1264,7 +1099,7 @@ function InterviewerHome({ user, projects, respondents, tasks, onOpenProject, on
               <span style={{ fontWeight: 600, fontSize: 13.5 }}>{r.name}</span>
               <span style={{ fontSize: 12.5, color: C.blueDark }}>{fmtDateTime(r.slot).split(",")[1] || fmtDateTime(r.slot)}</span>
             </div>
-          )) : <EmptyState icon={<Coffee {...ES} />} title="На сегодня интервью нет" />}
+          )) : <EmptyState icon="☕" title="На сегодня интервью нет" />}
         </Panel>
         <Panel>
           <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>Ближайшие слоты</div>
@@ -1273,7 +1108,7 @@ function InterviewerHome({ user, projects, respondents, tasks, onOpenProject, on
               <span style={{ fontSize: 13.5 }}>{r.name}</span>
               <span style={{ fontSize: 12.5, color: C.faint }}>{fmtDateTime(r.slot)}</span>
             </div>
-          )) : <EmptyState icon={<CalendarDays {...ES} />} title="Слотов пока нет" />}
+          )) : <EmptyState icon="🗓" title="Слотов пока нет" />}
         </Panel>
       </div>
 
@@ -1295,7 +1130,7 @@ function InterviewerHome({ user, projects, respondents, tasks, onOpenProject, on
               </div>
             );
           })}
-          {!myProjects.length && <EmptyState icon={<FolderOpen {...ES} />} title="Проектов пока не назначено" />}
+          {!myProjects.length && <EmptyState icon="📁" title="Проектов пока не назначено" />}
         </div>
       </Panel>
 
@@ -1306,7 +1141,7 @@ function InterviewerHome({ user, projects, respondents, tasks, onOpenProject, on
             <span style={{ fontSize: 13.5 }}>{t.title}</span>
             <span style={{ fontSize: 12, color: C.faint }}>{fmtDate(t.when)}</span>
           </div>
-        )) : <EmptyState icon={<CheckCircle2 {...ES} />} title="Задач нет" />}
+        )) : <EmptyState icon="✅" title="Задач нет" />}
       </Panel>
     </div>
   );
@@ -1396,7 +1231,7 @@ function InterviewSlider({ respondent, project, initialNotes, onSaveNote, onFini
               <h1 style={{ fontSize: "clamp(26px,3vw,36px)", fontWeight: 800, color: "var(--c-text)", margin: "0 0 24px", lineHeight: 1.12, letterSpacing: -0.5 }}>{block.title}</h1>
               {block.hint && (
                 <div style={{ background: "var(--c-hint-bg)", border: "1px solid var(--c-hint-bd)", color: "var(--c-hint-tx)", padding: "13px 17px", borderRadius: 13, marginBottom: 26, fontSize: 14.5, lineHeight: 1.55, display: "flex", gap: 10 }}>
-                  <span style={{ flexShrink: 0, display: "inline-flex" }}><Lightbulb size={16} strokeWidth={1.8} /></span><span>{block.hint}</span>
+                  <span style={{ flexShrink: 0 }}>💡</span><span>{block.hint}</span>
                 </div>
               )}
               <ol style={{ margin: 0, padding: 0, listStyle: "none" }}>
@@ -1527,7 +1362,7 @@ function CalendarView({ user, tasks, respondents, leads, reminders, onToggleRemi
               <span style={{ flex: 1, fontSize: 13.5 }}>{e.title}</span>
               <span style={{ fontSize: 12, color: C.faint }}>{fmtDateTime(e.when)}</span>
             </div>
-          )) : <EmptyState icon={<CalendarDays {...ES} />} title="Событий нет" />}
+          )) : <EmptyState icon="🗓" title="Событий нет" />}
         </Panel>
 
         <Panel>
@@ -1551,7 +1386,7 @@ function CalendarView({ user, tasks, respondents, leads, reminders, onToggleRemi
               </div>
             </div>
           ))}
-          {!myReminders.length && <EmptyState icon={<Bell {...ES} />} title="Напоминаний нет" />}
+          {!myReminders.length && <EmptyState icon="🔔" title="Напоминаний нет" />}
         </Panel>
       </div>
     </div>
@@ -1578,30 +1413,11 @@ function ImportExportModal({ kind, existing, projectId, onClose, onImport }) {
   const [map, setMap] = useState({});
   const [result, setResult] = useState(null);
 
-  // «Умный» автоподбор: распознаёт колонки по синонимам, даже если
-  // заголовок в файле назван иначе (тел./phone/номер → Телефон и т.д.).
-  const SYN = {
-    company: ["компания", "company", "организация", "организации", "фирма", "client", "клиент", "название", "company name"],
-    contact: ["контакт", "contact", "контактное лицо", "имя контакта", "лицо", "фио", "представитель", "person"],
-    name: ["имя", "name", "фио", "респондент", "full name", "участник", "контакт"],
-    title: ["должность", "title", "позиция", "position", "role", "роль"],
-    phone: ["телефон", "phone", "тел", "тел.", "номер", "номер телефона", "mobile", "моб", "whatsapp", "cell", "контактный телефон"],
-    email: ["email", "e-mail", "почта", "электронная почта", "mail", "емейл", "эл. почта"],
-    source: ["источник", "source", "канал", "channel", "откуда"],
-    screenStatus: ["скрининг", "статус скрининга", "screen", "screening", "квалификация"],
-    interviewStatus: ["статус интервью", "интервью", "interview", "interview status"],
-    reward: ["вознаграждение", "reward", "оплата", "бонус", "incentive", "приз"],
-    notes: ["заметки", "notes", "комментарий", "комментарии", "примечание", "comment", "note"],
-  };
-  const norm = (s) => (s || "").toString().trim().toLowerCase().replace(/[ё]/g, "е");
   const autoMap = (columns) => {
     const m = {};
-    const used = new Set();
     fields.forEach((f) => {
-      const want = [f.label, f.key, ...(SYN[f.key] || [])].map(norm);
-      let hit = columns.find((c) => !used.has(c) && want.includes(norm(c)));
-      if (!hit) hit = columns.find((c) => !used.has(c) && want.some((w) => w && (norm(c).includes(w) || w.includes(norm(c)))));
-      if (hit) { m[f.key] = hit; used.add(hit); }
+      const hit = columns.find((c) => c.toLowerCase().includes(f.label.toLowerCase()) || c.toLowerCase().includes(f.key));
+      if (hit) m[f.key] = hit;
     });
     return m;
   };
@@ -1671,7 +1487,7 @@ function ImportExportModal({ kind, existing, projectId, onClose, onImport }) {
 
       {result && (
         <div style={{ textAlign: "center", padding: "20px 0" }}>
-          <div style={{ display: "flex", justifyContent: "center", marginBottom: 10, color: C.green }}><CheckCircle2 size={40} strokeWidth={1.6} /></div>
+          <div style={{ fontSize: 34, marginBottom: 10 }}>✅</div>
           <div style={{ fontWeight: 800, fontSize: 18, marginBottom: 14 }}>Импорт завершён</div>
           <div style={{ display: "flex", justifyContent: "center", gap: 24 }}>
             <div><div style={{ fontSize: 24, fontWeight: 800, color: C.green }}>{result.added}</div><div style={{ fontSize: 12, color: C.faint }}>добавлено</div></div>
@@ -1916,8 +1732,8 @@ function CRMApp({ onSignOut }) {
   const [activeProject, setActiveProject] = useState(null); // id (admin drill-in / interviewer per-project)
   const [interviewMode, setInterviewMode] = useState(null); // {respId}
   const [importKind, setImportKind] = useState(null); // {kind, projectId?}
-  const [salesFilter, setSalesFilter] = useState("active"); // active | all
-  const [cardMenu, setCardMenu] = useState(null); // lead id with open menu
+  const [salesQuery, setSalesQuery] = useState("");        // visual: search leads
+  const [salesActiveOnly, setSalesActiveOnly] = useState(false); // visual: Активные/Все
   const saveT = useRef(null);
 
   // загрузка
@@ -1952,25 +1768,24 @@ function CRMApp({ onSignOut }) {
   const upd = (key, id, fn) => setDb((d) => ({ ...d, [key]: d[key].map((x) => (x.id === id ? fn(x) : x)) }));
 
   // ---------- навигация по ролям ----------
-  const ic = { size: 17, strokeWidth: 1.9 };
   const NAV = {
     admin: [
-      { id: "sales", label: "Продажи", icon: <BarChart3 {...ic} /> },
-      { id: "recruit", label: "Рекрутинг", icon: <Mic {...ic} /> },
-      { id: "calendar", label: "Календарь", icon: <Calendar {...ic} /> },
-      { id: "analytics", label: "Аналитика", icon: <TrendingUp {...ic} /> },
-      { id: "users", label: "Пользователи", icon: <Users {...ic} /> },
-      { id: "settings", label: "Настройки", icon: <Settings {...ic} /> },
+      { id: "sales", label: "Продажи", icon: "📊" },
+      { id: "recruit", label: "Рекрутинг", icon: "🎙" },
+      { id: "calendar", label: "Календарь", icon: "🗓" },
+      { id: "analytics", label: "Аналитика", icon: "📈" },
+      { id: "users", label: "Пользователи", icon: "👤" },
+      { id: "settings", label: "Настройки", icon: "⚙️" },
     ],
     sales: [
-      { id: "sales", label: "Продажи", icon: <BarChart3 {...ic} /> },
-      { id: "calendar", label: "Календарь", icon: <Calendar {...ic} /> },
-      { id: "analytics", label: "Аналитика", icon: <TrendingUp {...ic} /> },
+      { id: "sales", label: "Продажи", icon: "📊" },
+      { id: "calendar", label: "Календарь", icon: "🗓" },
+      { id: "analytics", label: "Аналитика", icon: "📈" },
     ],
     interviewer: [
-      { id: "workspace", label: "Рабочее пространство", icon: <LayoutDashboard {...ic} /> },
-      { id: "calendar", label: "Календарь", icon: <Calendar {...ic} /> },
-      { id: "analytics", label: "Аналитика", icon: <TrendingUp {...ic} /> },
+      { id: "workspace", label: "Рабочее пространство", icon: "🎙" },
+      { id: "calendar", label: "Календарь", icon: "🗓" },
+      { id: "analytics", label: "Аналитика", icon: "📈" },
     ],
   };
   const nav = NAV[role];
@@ -1985,6 +1800,13 @@ function CRMApp({ onSignOut }) {
 
   // ---------- данные с учётом прав (3.2) ----------
   const visibleLeads = isAdmin ? db.leads : db.leads.filter((l) => l.owner === userId);
+  // визуальные фильтры воронки (поиск + Активные/Все) — не трогают данные
+  const _lq = salesQuery.trim().toLowerCase();
+  const displayLeads = visibleLeads.filter((l) => {
+    if (salesActiveOnly && ["won", "lost"].includes(l.stage)) return false;
+    if (!_lq) return true;
+    return [l.company, l.contact, l.title, l.source].filter(Boolean).some((v) => String(v).toLowerCase().includes(_lq));
+  });
   const visibleProjects = isAdmin ? db.projects
     : role === "interviewer" ? db.projects.filter((p) => p.interviewers.includes(userId))
     : [];
@@ -2020,8 +1842,6 @@ function CRMApp({ onSignOut }) {
     });
   };
   const saveResp = (r) => upd("respondents", r.id, () => r);
-  const deleteLeads = (ids) => { const s = new Set(ids); patch({ leads: db.leads.filter((l) => !s.has(l.id)) }); };
-  const deleteResps = (ids) => { const s = new Set(ids); patch({ respondents: db.respondents.filter((r) => !s.has(r.id)) }); };
   const saveScript = (projectId, script) => upd("projects", projectId, (p) => ({ ...p, script }));
 
   // ---------- интервью: заметки + завершение ----------
@@ -2072,71 +1892,86 @@ function CRMApp({ onSignOut }) {
   ], "leads_insightlab", fmt);
 
   // ---------- карточка лида в канбане ----------
-  const leadCard = (l, ds) => (
-    <KanbanCard key={l.id} onDragStart={ds} onClick={() => setOpenLead(l)}
-      accent={l.stage === "won" ? C.green : l.stage === "lost" ? C.red : C.blue}>
-      <div style={{ position: "relative", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
-        <div style={{ fontWeight: 700, fontSize: 13.5, minWidth: 0 }}>{l.company}</div>
-        <button onClick={(e) => { e.stopPropagation(); setCardMenu(cardMenu === l.id ? null : l.id); }} title="Действия"
-          style={{ flexShrink: 0, width: 26, height: 26, borderRadius: 999, border: "1px solid " + C.border, background: C.surface, color: C.muted, cursor: "pointer", display: "grid", placeItems: "center", lineHeight: 0 }}>
-          <MoreHorizontal size={15} strokeWidth={2} />
+  const leadCard = (l, ds) => {
+    const won = l.stage === "won", lost = l.stage === "lost";
+    const accent = won ? C.green : lost ? C.red : C.blue;
+    const hot = l.nextTouch && l.nextTouch <= todayISO() && !won && !lost;
+    const touchLabel = !l.nextTouch ? "Без касания" : (l.nextTouch === todayISO() ? "Сегодня" : "касание " + fmtDate(l.nextTouch));
+    return (
+    <KanbanCard key={l.id} onDragStart={ds} onClick={() => setOpenLead(l)} accent={accent}>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
+        <div style={{ fontWeight: 700, fontSize: 14, lineHeight: 1.25, color: C.text }}>{l.company}</div>
+        <button className="lead-more" onClick={(e) => { e.stopPropagation(); setOpenLead(l); }}
+          title="Открыть" style={{
+            flexShrink: 0, width: 26, height: 26, marginTop: -2, marginRight: -2, borderRadius: "50%",
+            border: "1px solid " + C.border, background: C.surface, color: C.muted, cursor: "pointer",
+            display: "grid", placeItems: "center", opacity: 0, transition: "opacity .15s, background .15s",
+          }}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="19" cy="12" r="1.5" /></svg>
         </button>
-        {cardMenu === l.id && (
-          <div onClick={(e) => e.stopPropagation()} onMouseLeave={() => setCardMenu(null)}
-            style={{ position: "absolute", top: 30, right: 0, zIndex: 40, minWidth: 150, background: C.surface, border: "1px solid " + C.border, borderRadius: 10, boxShadow: C.shadowLg, overflow: "hidden" }}>
-            <button onClick={() => { setCardMenu(null); setOpenLead(l); }} style={menuItemStyle()}>Открыть</button>
-            <button onClick={() => { setCardMenu(null); if (confirm("Удалить лид «" + (l.company || "без названия") + "»?")) deleteLeads([l.id]); }} style={menuItemStyle(true)}>Удалить</button>
-          </div>
-        )}
       </div>
-      <div style={{ fontSize: 12, color: C.faint, marginTop: 2 }}>{l.contact} · {l.title}</div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8 }}>
-        <Badge color={C.muted} bg={C.panel}>{l.source}</Badge>
-        <span style={{ fontSize: 12, fontWeight: 700, color: C.text }}>{fmtMoney(l.amount)}</span>
+      {(l.contact || l.title) && <div style={{ fontSize: 11.5, color: C.faint, marginTop: 4, lineHeight: 1.35 }}>{[l.contact, l.title].filter(Boolean).join(" · ")}</div>}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 11 }}>
+        <span style={{ fontSize: 10.5, fontWeight: 600, color: C.muted, background: "var(--g-col)", border: "1px solid var(--g-col-border)", padding: "2px 8px", borderRadius: 999 }}>{l.source}</span>
+        {hot && <span style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 11, fontWeight: 700, color: C.amber }}>🔥 Горячий</span>}
+        <span style={{ marginLeft: "auto", fontSize: 13.5, fontWeight: 700, color: C.text, fontVariantNumeric: "tabular-nums" }}>{fmtMoney(l.amount)}</span>
       </div>
-      {l.nextTouch && <div style={{ fontSize: 11, color: C.blueDark, marginTop: 6 }}>↻ касание {fmtDate(l.nextTouch)}</div>}
+      <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 12, fontSize: 11.5, fontWeight: 600, color: won ? C.green : accent }}>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><polyline points="12 7 12 12 15 14" /></svg>
+        {touchLabel}
+      </div>
     </KanbanCard>
-  );
+    );
+  };
 
   // ====================== Рендер страниц ======================
   let content = null;
 
   if (validPage === "sales") {
-    const addLeadToStage = (stage) => setOpenLead({ id: uid("lead"), company: "", contact: "", title: "", phone: "", email: "", source: "LinkedIn", stage: stage || "new", owner: userId, nextTouch: todayISO(), amount: 0, notes: "", history: [] });
-    // KPI по видимым лидам
+    const _act = visibleLeads.filter((l) => !["won", "lost"].includes(l.stage));
     const _won = visibleLeads.filter((l) => l.stage === "won");
     const _lost = visibleLeads.filter((l) => l.stage === "lost");
-    const _active = visibleLeads.filter((l) => !["won", "lost"].includes(l.stage));
-    const winRate = _won.length + _lost.length ? Math.round((_won.length / (_won.length + _lost.length)) * 100) : 0;
-    const pipeline = _active.reduce((s, l) => s + (l.amount || 0), 0);
-    const closed = _won.reduce((s, l) => s + (l.amount || 0), 0);
-    const avgCheck = _won.length ? Math.round(closed / _won.length) : 0;
-    // фильтр Активные/Все
-    const boardLeads = salesFilter === "active" ? _active : visibleLeads;
+    const _winRate = _won.length + _lost.length ? Math.round((_won.length / (_won.length + _lost.length)) * 100) : 0;
+    const _pipeline = _act.reduce((s, l) => s + (l.amount || 0), 0);
+    const _revenue = _won.reduce((s, l) => s + (l.amount || 0), 0);
+    const _avg = _won.length ? Math.round(_revenue / _won.length) : (_act.length ? Math.round(_pipeline / _act.length) : 0);
+    const mln = (n) => n >= 1e6 ? (n / 1e6).toFixed(1).replace(/\.0$/, "") + " млн ₸" : fmtMoney(n);
+    const stageColor = (id) => ({ new: C.faint, in_work: C.indigo, demo_set: C.indigo, demo_done: C.blue, kp_sent: C.amber, negotiation: C.amber, won: C.green, lost: C.red }[id] || C.blue);
+    const Kpi = ({ label, value, accent, sub, grad }) => (
+      <div className="glass-card" style={{ flex: 1, minWidth: 0, padding: "20px 22px", ...(grad ? { background: "linear-gradient(150deg, color-mix(in srgb, " + C.blue + " 14%, var(--g-card)), var(--g-card))" } : null) }}>
+        <div style={{ fontSize: 12.5, color: C.muted, fontWeight: 600 }}>{label}</div>
+        <div style={{ fontSize: 28, fontWeight: 800, color: accent || C.text, letterSpacing: -0.6, lineHeight: 1, marginTop: 10, fontVariantNumeric: "tabular-nums" }}>{value}</div>
+        {sub && <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 11, fontSize: 12, fontWeight: 600, color: C.muted }}>
+          <span style={{ width: 7, height: 7, borderRadius: 7, background: accent || C.muted }} />{sub}</div>}
+      </div>
+    );
     content = (
       <>
-        <PageHead title="Продажи" sub={"Воронка лидов · " + _active.length + " активных " + plural(_active.length, "сделка", "сделки", "сделок") + " на " + fmtMoney(pipeline)}>
-          <div style={{ display: "inline-flex", padding: 3, borderRadius: 999, background: C.panel, border: "1px solid " + C.border, marginRight: 4 }}>
-            {[["active", "Активные"], ["all", "Все"]].map(([v, lbl]) => (
-              <button key={v} onClick={() => setSalesFilter(v)} style={{
-                border: "none", cursor: "pointer", fontFamily: FONT, fontSize: 13, fontWeight: 600,
-                padding: "5px 14px", borderRadius: 999,
-                background: salesFilter === v ? C.text : "transparent",
-                color: salesFilter === v ? C.bg : C.muted, transition: "all .15s" }}>{lbl}</button>
-            ))}
+        <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 22, flexWrap: "wrap", gap: 14 }}>
+          <div>
+            <h2 style={{ margin: 0, fontSize: 32, fontWeight: 800, letterSpacing: -0.6, color: C.text }}>Продажи</h2>
+            <div style={{ fontSize: 14.5, color: C.muted, marginTop: 6 }}>Воронка лидов · {_act.length} активных сделок на {mln(_pipeline)}</div>
           </div>
-          <Btn variant="ghost" size="sm" onClick={() => exportLeads("csv")}>↓ CSV</Btn>
-          <Btn variant="ghost" size="sm" onClick={() => exportLeads("xlsx")}>↓ XLSX</Btn>
-          <Btn variant="ghost" size="sm" onClick={() => setImportKind({ kind: "lead" })}>↑ Импорт</Btn>
-          <Btn onClick={() => addLeadToStage("new")}>+ Лид</Btn>
-        </PageHead>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 14, marginBottom: 20 }}>
-          <StatCard label="Win-rate" value={winRate + "%"} sub={_won.length + " выиграно / " + _lost.length + " проиграно"} accent={C.green} />
-          <StatCard label="Пайплайн" value={fmtMoney(pipeline)} sub="в активных стадиях" />
-          <StatCard label="Закрытая выручка" value={fmtMoney(closed)} accent={C.blue} />
-          <StatCard label="Средний чек" value={fmtMoney(avgCheck)} sub="по выигранным" />
+          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+            <div className="seg-toggle">
+              <button className={salesActiveOnly ? "on" : ""} onClick={() => setSalesActiveOnly(true)}>Активные</button>
+              <button className={!salesActiveOnly ? "on" : ""} onClick={() => setSalesActiveOnly(false)}>Все</button>
+            </div>
+            <Btn variant="ghost" size="sm" onClick={() => exportLeads("csv")}>↓ CSV</Btn>
+            <Btn variant="ghost" size="sm" onClick={() => exportLeads("xlsx")}>↓ XLSX</Btn>
+            <Btn variant="ghost" size="sm" onClick={() => setImportKind({ kind: "lead" })}>↑ Импорт</Btn>
+            <Btn onClick={() => setOpenLead({ id: uid("lead"), company: "", contact: "", title: "", phone: "", email: "", source: "LinkedIn", stage: "new", owner: userId, nextTouch: todayISO(), amount: 0, notes: "", history: [] })}>+ Лид</Btn>
+          </div>
         </div>
-        <KanbanBoard stages={SALES_STAGES} items={boardLeads} getStage={(l) => l.stage} renderCard={leadCard} onMove={moveLead} onDelete={deleteLeads} boardId="sales" onAdd={addLeadToStage} />
+        <div style={{ display: "flex", gap: 16, marginBottom: 26, flexWrap: "wrap" }}>
+          <Kpi label="Win-rate" value={_winRate + "%"} accent={C.green} sub={_won.length + " выиграно / " + _lost.length + " проиграно"} />
+          <Kpi label="Пайплайн" value={mln(_pipeline)} sub={_act.length + " активных"} />
+          <Kpi label="Выручка" value={mln(_revenue)} accent={C.indigo} sub={_won.length + " закрыто"} />
+          <Kpi label="Средний чек" value={mln(_avg)} sub="по сделкам" grad />
+        </div>
+        <KanbanBoard stages={SALES_STAGES} items={displayLeads} getStage={(l) => l.stage} renderCard={leadCard} onMove={moveLead}
+          dotColor={stageColor}
+          onAddToStage={(stage) => setOpenLead({ id: uid("lead"), company: "", contact: "", title: "", phone: "", email: "", source: "LinkedIn", stage, owner: userId, nextTouch: todayISO(), amount: 0, notes: "", history: [] })} />
       </>
     );
   }
@@ -2146,7 +1981,7 @@ function CRMApp({ onSignOut }) {
       const p = projectById(activeProject);
       content = <ProjectView project={p} users={db.users} respondents={db.respondents}
         canEditScript={true} canConduct={true}
-        onMoveResp={moveResp} onOpenResp={setOpenResp} onDeleteResp={deleteResps}
+        onMoveResp={moveResp} onOpenResp={setOpenResp}
         onSaveScript={(s) => saveScript(p.id, s)} onBack={() => setActiveProject(null)} />;
     } else {
       content = (
@@ -2170,7 +2005,7 @@ function CRMApp({ onSignOut }) {
           </div>
           <ProjectView project={p} users={db.users} respondents={db.respondents}
             canEditScript={false} canConduct={true}
-            onMoveResp={moveResp} onOpenResp={setOpenResp} onDeleteResp={deleteResps}
+            onMoveResp={moveResp} onOpenResp={setOpenResp}
             onSaveScript={(s) => saveScript(p.id, s)} onBack={() => setActiveProject(null)} />
         </>
       );
@@ -2210,8 +2045,8 @@ function CRMApp({ onSignOut }) {
           fontFamily: FONT, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
         Выйти
       </button>
-      <Header user={user} users={isAdmin ? db.users : [user]} onSwitchUser={switchUser} nav={nav} current={validPage} onNav={(p) => { setPage(p); setActiveProject(null); }} />
-      <main style={{ maxWidth: ["sales", "recruit", "workspace"].includes(validPage) ? 1700 : 1280, margin: "0 auto", padding: "26px 32px 80px", transition: "max-width .2s" }}>{content}</main>
+      <Header user={user} users={isAdmin ? db.users : [user]} onSwitchUser={switchUser} nav={nav} current={validPage} onNav={(p) => { setPage(p); setActiveProject(null); }} query={salesQuery} setQuery={setSalesQuery} />
+      <main style={{ maxWidth: 1280, margin: "0 auto", padding: "26px 24px 80px" }}>{content}</main>
 
       {/* Модалки */}
       {openLead && (
@@ -2258,7 +2093,7 @@ function PageHead({ title, sub, children }) {
 }
 
 function ProjectsGrid({ projects, users, respondents, onOpen }) {
-  if (!projects.length) return <EmptyState icon={<FolderOpen {...ES} />} title="Проектов нет" text="Выиграйте лид в воронке продаж — создастся проект." />;
+  if (!projects.length) return <EmptyState icon="📁" title="Проектов нет" text="Выиграйте лид в воронке продаж — создастся проект." />;
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(260px,1fr))", gap: 16 }}>
       {projects.map((p) => {
