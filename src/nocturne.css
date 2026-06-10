@@ -50,6 +50,7 @@
   --g-card:rgba(255,255,255,0.085);        /* card fill — see-through frost */
   --g-strong:rgba(20,28,44,0.55);          /* denser pad under dense text */
   --g-border:rgba(255,255,255,0.18);       /* bright glass rim */
+  --g-rim-top:rgba(255,255,255,0.55);
   --g-highlight:inset 0 1px 0 rgba(255,255,255,0.14);
   --g-blur:24px;
   --g-shadow:0 10px 34px rgba(0,0,0,0.46);
@@ -107,6 +108,7 @@
   --g-card:rgba(255,255,255,0.20);         /* frosted, lets color tint through */
   --g-strong:rgba(255,255,255,0.55);       /* denser pad under dense text */
   --g-border:rgba(255,255,255,0.65);       /* bright glass rim */
+  --g-rim-top:rgba(70,100,150,0.20);
   --g-highlight:inset 0 1px 0 rgba(255,255,255,0.6);
   --g-blur:22px;
   --g-shadow:0 10px 34px rgba(30,30,60,0.13);
@@ -282,3 +284,22 @@ body::before{
 /* lead card: reveal the round ··· button on hover */
 .kanban-card:hover .lead-more{ opacity:1 !important; }
 .kanban-card .lead-more:hover{ background:var(--c-blue-soft); color:var(--c-blue-dark); }
+
+/* --- премиум-бордер карточки: тонкая граница только сверху, плавно тает вниз --- */
+.kanban-card { position: relative; }
+.kanban-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(to bottom,
+    var(--g-rim-top, rgba(255,255,255,0.75)) 0%,
+    var(--g-rim-top, rgba(255,255,255,0.75)) 6%,
+    transparent 55%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+          mask-composite: exclude;
+  pointer-events: none;
+}

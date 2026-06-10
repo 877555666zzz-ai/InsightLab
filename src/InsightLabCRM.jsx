@@ -11,7 +11,21 @@ import { motion, AnimatePresence } from "framer-motion";
 import NocturneBackground from "./components/NocturneBackground";
 import { ThemeProvider, ThemeToggle, useTheme } from "./components/theme";
 import BrandMark from "./components/Logo";
+import {
+  BarChart3, Mic, Calendar as CalIcon, TrendingUp, Users as UsersIcon, Settings as SettingsIcon, LayoutDashboard,
+} from "lucide-react";
 import "./nocturne.css";
+
+// премиум-иконки навбара (вместо эмодзи), цвет наследуется от кнопки (активная = синяя)
+const NAV_ICONS = {
+  sales: <BarChart3 size={17} strokeWidth={2} />,
+  recruit: <Mic size={17} strokeWidth={2} />,
+  calendar: <CalIcon size={17} strokeWidth={2} />,
+  analytics: <TrendingUp size={17} strokeWidth={2} />,
+  users: <UsersIcon size={17} strokeWidth={2} />,
+  settings: <SettingsIcon size={17} strokeWidth={2} />,
+  workspace: <LayoutDashboard size={17} strokeWidth={2} />,
+};
 
 // ============================================================================
 // SECTION: core
@@ -622,7 +636,7 @@ function Header({ user, users, onSwitchUser, nav, current, onNav, query, setQuer
             padding: "9px 14px", borderRadius: 999, cursor: "pointer", fontFamily: FONT,
             whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 6, transition: "all .18s",
           }}>
-            <span>{n.icon}</span>{n.label}
+            <span style={{ display: "inline-flex", alignItems: "center" }}>{NAV_ICONS[n.id] || n.icon}</span>{n.label}
           </button>
         ))}
       </nav>
@@ -680,13 +694,12 @@ function KanbanCard({ children, onDragStart, onClick, accent }) {
       style={{
         background: "var(--g-card)",
         backdropFilter: "blur(var(--g-blur)) saturate(140%)", WebkitBackdropFilter: "blur(var(--g-blur)) saturate(140%)",
-        border: "1px solid var(--g-border)",
-        boxShadow: "inset 3px 0 0 " + ac + ", var(--g-highlight), var(--g-shadow)",
+        boxShadow: "inset 3px 0 0 " + ac + ", var(--g-shadow)",
         borderRadius: 16, padding: 14, marginBottom: 12, cursor: "grab",
         transition: "transform .2s cubic-bezier(.22,.61,.36,1), box-shadow .2s, border-color .2s",
       }}
-      onMouseEnter={(e) => { e.currentTarget.style.boxShadow = "inset 3px 0 0 " + ac + ", var(--g-highlight), var(--g-shadow-hi)"; e.currentTarget.style.transform = "translateY(-3px)"; }}
-      onMouseLeave={(e) => { e.currentTarget.style.boxShadow = "inset 3px 0 0 " + ac + ", var(--g-highlight), var(--g-shadow)"; e.currentTarget.style.transform = "none"; }}
+      onMouseEnter={(e) => { e.currentTarget.style.boxShadow = "inset 3px 0 0 " + ac + ", var(--g-shadow-hi)"; e.currentTarget.style.transform = "translateY(-3px)"; }}
+      onMouseLeave={(e) => { e.currentTarget.style.boxShadow = "inset 3px 0 0 " + ac + ", var(--g-shadow)"; e.currentTarget.style.transform = "none"; }}
     >{children}</div>
   );
 }
@@ -710,7 +723,7 @@ function KanbanBoard({ stages, items, getStage, renderCard, onMove, sideStages, 
       style={{ minWidth: 268, width: 268, flexShrink: 0, opacity: isSide ? 0.96 : 1 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "2px 6px 12px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-          <span style={{ width: 9, height: 9, borderRadius: 9, background: dc, boxShadow: "0 0 0 4px color-mix(in srgb, " + dc + " 16%, transparent)" }} />
+          <span style={{ width: 9, height: 9, borderRadius: 9, background: dc, flexShrink: 0 }} />
           <span style={{ fontSize: 13.5, fontWeight: 700, color: C.text }}>{st.title}</span>
         </div>
         <span style={{ fontSize: 11.5, fontWeight: 700, color: C.muted, background: "var(--g-col)", borderRadius: 999, padding: "2px 10px", border: "1px solid var(--g-col-border)" }}>
