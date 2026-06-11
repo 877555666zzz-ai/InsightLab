@@ -205,4 +205,42 @@ export const integrations = {
     const { error } = await supabase.from("api_tokens").delete().eq("id", id);
     if (error) throw error;
   },
+
+  // ---- вебхуки (подписки на события CRM) ----
+  listWebhooks: async () => {
+    const { data, error } = await supabase.from("webhook_subscriptions")
+      .select("id, url, events, active, created_at")
+      .order("created_at", { ascending: false });
+    if (error) throw error;
+    return data || [];
+  },
+  createWebhook: async (url, events, secret) => {
+    const { error } = await supabase.from("webhook_subscriptions")
+      .insert({ url, events, secret: secret || null, active: true });
+    if (error) throw error;
+  },
+  deleteWebhook: async (id) => {
+    const { error } = await supabase.from("webhook_subscriptions").delete().eq("id", id);
+    if (error) throw error;
+  },
+
+  // ---- журнал запросов к API (audit log) ----
+  listAudit: async (limit = 50) => {
+    const { data, error } = await supabase.from("api_audit_log")
+      .select("id, method, path, status, ip, created_at, api_tokens(name)")
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    if (error) throw error;
+    return data || [];
+  },
+
+  // ---- журнал доставки вебхуков ----
+  listDeliveries: async (limit = 50) => {
+    const { data, error } = await supabase.from("webhook_deliveries")
+      .select("id, event, created_at, webhook_subscriptions(url)")
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    if (error) throw error;
+    return data || [];
+  },
 };

@@ -7,12 +7,24 @@
 //   увеличивает request_count и пишется в api_audit_log.
 //
 // Эндпоинты:
-//   POST /inbound/lead            scope inbound:leads     — принять лид снаружи
+//   ВХОДЯЩИЕ:
+//   POST /inbound/lead            scope inbound:leads     — принять лид
+//   POST /inbound/contact         scope inbound:contacts  — принять контакт
+//   POST /inbound/event           scope inbound:events    — записать событие
+//   POST /inbound/batch           scope по object_type    — массовая загрузка
+//   ИСХОДЯЩИЕ:
 //   GET  /pipelines               scope outbound:pipelines— список воронок
 //   GET  /pipelines/:id/stages    scope outbound:pipelines— стадии воронки
 //   GET  /users?active=true       scope outbound:users    — список пользователей
 //   GET  /leads?stage_id=&phone=&email=&limit=  scope outbound:leads — лиды
 //   GET  /leads/:id               scope outbound:leads    — один лид
+//   ВЕБХУКИ:
+//   POST   /webhooks/subscriptions       scope webhooks:subscribe — подписаться
+//   GET    /webhooks/subscriptions       scope webhooks:subscribe — список
+//   DELETE /webhooks/subscriptions/:id   scope webhooks:subscribe — удалить
+//   (саму отправку вебхуков делает триггер БД из 07_integrations_phase2.sql)
+//
+//   Rate limit: 120 запросов/мин на токен → иначе 429.
 //
 // Деплой:  supabase functions deploy crm-api --no-verify-jwt
 //   (--no-verify-jwt обязателен: авторизация у нас своя, по API-токену)
@@ -42,7 +54,7 @@ const SALES_STAGES = [
 const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, content-type",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
 };
 
 function json(body: unknown, status = 200) {
@@ -67,6 +79,94 @@ function firstVal(v: unknown): string {
   // принимает "строку" или [{ value, type }] → первое value
   if (Array.isArray(v)) return String(v[0]?.value ?? v[0] ?? "").trim();
   return String(v ?? "").trim();
+}
+
+// ---- результат записи одного объекта ----
+type WriteResult = { status: "created" | "duplicate" | "error"; id?: string; error?: string };
+
+// Создать лид (с дедупликацией по phone/email). Используется и одиночным
+// эндпоинтом, и batch-загрузкой.
+async function insertLead(b: Record<string, unknown>): Promise<WriteResult> {
+  const phone = firstVal(b.phone);
+  const email = firstVal(b.email);
+  const company = String(b.company_name ?? b.company ?? "").trim() || "—";
+  const contact = String(b.contact_name ?? b.contact ?? "").trim();
+
+  if (phone || email) {
+    const orParts: string[] = [];
+    if (phone) orParts.push(`phone.eq.${phone}`);
+    if (email) orParts.push(`email.eq.${email}`);
+    const { data: dups } = await db.from("leads").select("id").or(orParts.join(",")).limit(1);
+    if (dups && dups.length) return { status: "duplicate", id: dups[0].id };
+  }
+
+  let owner: string | null = null;
+  const assigned = String(b.assigned_to ?? "").trim();
+  if (assigned) {
+    const { data: p } = await db.from("profiles").select("id").eq("id", assigned).maybeSingle();
+    if (p) owner = p.id;
+  }
+  if (!owner) {
+    const { data: adm } = await db.from("profiles").select("id").eq("role", "admin").eq("active", true).limit(1);
+    owner = adm?.[0]?.id ?? null;
+  }
+
+  const stage = String(b.stage_id ?? "new").trim();
+  const validStage = SALES_STAGES.some((s) => s.id === stage) ? stage : "new";
+  const id = "lead_" + crypto.randomUUID().replace(/-/g, "").slice(0, 16);
+  const today = new Date().toISOString().slice(0, 10);
+
+  const row = {
+    id, company, contact, title: String(b.title ?? "").trim(),
+    phone, email, source: String(b.source ?? "API").trim() || "API",
+    stage: validStage, owner, next_touch: today, amount: 0,
+    notes: String(b.comment ?? b.notes ?? "").trim(),
+    history: [{ id: "act_" + crypto.randomUUID().slice(0, 8), type: "task", title: "Создан через API", when: new Date().toISOString(), done: true, owner }],
+  };
+  const { error } = await db.from("leads").insert(row);
+  if (error) return { status: "error", error: error.message };
+  return { status: "created", id };
+}
+
+// Создать контакт (дедуп по phone/email).
+async function insertContact(b: Record<string, unknown>): Promise<WriteResult> {
+  const phone = firstVal(b.phone);
+  const email = firstVal(b.email);
+  if (phone || email) {
+    const orParts: string[] = [];
+    if (phone) orParts.push(`phone.eq.${phone}`);
+    if (email) orParts.push(`email.eq.${email}`);
+    const { data: dups } = await db.from("contacts").select("id").or(orParts.join(",")).limit(1);
+    if (dups && dups.length) return { status: "duplicate", id: dups[0].id };
+  }
+  const row = {
+    name: String(b.name ?? "").trim(),
+    company: String(b.company ?? "").trim(),
+    phone, email,
+    telegram: String(b.telegram ?? "").trim(),
+    source: String(b.source ?? "API").trim() || "API",
+    linked_lead: String(b.linked_lead ?? "").trim() || null,
+  };
+  const { data, error } = await db.from("contacts").insert(row).select("id").single();
+  if (error) return { status: "error", error: error.message };
+  return { status: "created", id: data.id };
+}
+
+// Записать событие.
+async function insertEvent(b: Record<string, unknown>): Promise<WriteResult> {
+  const row = {
+    lead_id: String(b.lead_id ?? "").trim() || null,
+    type: String(b.type ?? "").trim(),
+    channel: String(b.channel ?? "").trim(),
+    direction: String(b.direction ?? "").trim(),
+    text: String(b.text ?? "").trim(),
+    status: String(b.status ?? "").trim(),
+    source: String(b.source ?? "API").trim() || "API",
+    occurred_at: b.timestamp ? String(b.timestamp) : null,
+  };
+  const { data, error } = await db.from("crm_events").insert(row).select("id").single();
+  if (error) return { status: "error", error: error.message };
+  return { status: "created", id: data.id };
 }
 
 Deno.serve(async (req) => {
@@ -110,54 +210,71 @@ Deno.serve(async (req) => {
 
   const need = (scope: string) => hasScope(scopes, scope);
 
+  // ---------- rate limiting: не более RATE_LIMIT запросов/мин на токен ----------
+  const RATE_LIMIT = 120;
+  {
+    const since = new Date(Date.now() - 60_000).toISOString();
+    const { count } = await db
+      .from("api_audit_log")
+      .select("*", { count: "exact", head: true })
+      .eq("token_id", tok.id)
+      .gte("created_at", since);
+    if ((count ?? 0) >= RATE_LIMIT) return finish(429, { error: "Too Many Requests" });
+  }
+
   try {
     // ===================== ВХОДЯЩИЙ КАНАЛ =====================
     // POST /inbound/lead
     if (req.method === "POST" && path === "/inbound/lead") {
       if (!need("inbound:leads")) return finish(403, { error: "Forbidden: scope inbound:leads required" });
       const b = await req.json().catch(() => ({}));
+      const r = await insertLead(b);
+      if (r.status === "duplicate") return finish(409, { id: r.id, status: "duplicate", message: "Already exists" });
+      if (r.status === "error") return finish(400, { error: r.error });
+      return finish(201, { id: r.id, status: "created", created_at: new Date().toISOString() });
+    }
 
-      const phone = firstVal(b.phone);
-      const email = firstVal(b.email);
-      const company = String(b.company_name ?? b.company ?? "").trim() || "—";
-      const contact = String(b.contact_name ?? b.contact ?? "").trim();
+    // POST /inbound/contact
+    if (req.method === "POST" && path === "/inbound/contact") {
+      if (!need("inbound:contacts")) return finish(403, { error: "Forbidden: scope inbound:contacts required" });
+      const b = await req.json().catch(() => ({}));
+      const r = await insertContact(b);
+      if (r.status === "duplicate") return finish(409, { id: r.id, status: "duplicate", message: "Already exists" });
+      if (r.status === "error") return finish(400, { error: r.error });
+      return finish(201, { id: r.id, status: "created", created_at: new Date().toISOString() });
+    }
 
-      // дедупликация по телефону/email
-      if (phone || email) {
-        const orParts: string[] = [];
-        if (phone) orParts.push(`phone.eq.${phone}`);
-        if (email) orParts.push(`email.eq.${email}`);
-        const { data: dups } = await db.from("leads").select("id").or(orParts.join(",")).limit(1);
-        if (dups && dups.length) return finish(409, { id: dups[0].id, status: "duplicate", message: "Already exists" });
+    // POST /inbound/event
+    if (req.method === "POST" && path === "/inbound/event") {
+      if (!need("inbound:events")) return finish(403, { error: "Forbidden: scope inbound:events required" });
+      const b = await req.json().catch(() => ({}));
+      const r = await insertEvent(b);
+      if (r.status === "error") return finish(400, { error: r.error });
+      return finish(201, { id: r.id, status: "created" });
+    }
+
+    // POST /inbound/batch  { object_type, items[], on_duplicate }
+    if (req.method === "POST" && path === "/inbound/batch") {
+      const b = await req.json().catch(() => ({}));
+      const ot = String(b.object_type ?? "lead").trim();
+      const scopeNeeded = ot === "lead" ? "inbound:leads"
+        : ot === "contact" ? "inbound:contacts"
+        : ot === "event" ? "inbound:events"
+        : "inbound:any";
+      if (!need(scopeNeeded)) return finish(403, { error: `Forbidden: scope ${scopeNeeded} required` });
+      const items = Array.isArray(b.items) ? b.items : [];
+      let created = 0, duplicates = 0, errors = 0;
+      const error_details: Array<{ index: number; reason: string }> = [];
+      for (let i = 0; i < items.length; i++) {
+        const it = items[i] || {};
+        const r = ot === "contact" ? await insertContact(it)
+          : ot === "event" ? await insertEvent(it)
+          : await insertLead(it);
+        if (r.status === "created") created++;
+        else if (r.status === "duplicate") duplicates++;
+        else { errors++; error_details.push({ index: i, reason: r.error || "error" }); }
       }
-
-      // владелец: assigned_to (если валидный профиль) иначе первый админ иначе null
-      let owner: string | null = null;
-      const assigned = String(b.assigned_to ?? "").trim();
-      if (assigned) {
-        const { data: p } = await db.from("profiles").select("id").eq("id", assigned).maybeSingle();
-        if (p) owner = p.id;
-      }
-      if (!owner) {
-        const { data: adm } = await db.from("profiles").select("id").eq("role", "admin").eq("active", true).limit(1);
-        owner = adm?.[0]?.id ?? null;
-      }
-
-      const stage = String(b.stage_id ?? "new").trim();
-      const validStage = SALES_STAGES.some((s) => s.id === stage) ? stage : "new";
-      const id = "lead_" + crypto.randomUUID().replace(/-/g, "").slice(0, 16);
-      const today = new Date().toISOString().slice(0, 10);
-
-      const row = {
-        id, company, contact, title: String(b.title ?? "").trim(),
-        phone, email, source: String(b.source ?? "API").trim() || "API",
-        stage: validStage, owner, next_touch: today, amount: 0,
-        notes: String(b.comment ?? b.notes ?? "").trim(),
-        history: [{ id: "act_" + crypto.randomUUID().slice(0, 8), type: "task", title: "Создан через API", when: new Date().toISOString(), done: true, owner }],
-      };
-      const { error } = await db.from("leads").insert(row);
-      if (error) return finish(400, { error: error.message });
-      return finish(201, { id, status: "created", created_at: new Date().toISOString() });
+      return finish(200, { created, duplicates, errors, error_details });
     }
 
     // ===================== ИСХОДЯЩИЙ КАНАЛ =====================
@@ -208,6 +325,43 @@ Deno.serve(async (req) => {
       const { data, count, error } = await q;
       if (error) return finish(500, { error: error.message });
       return finish(200, { total: count ?? data?.length ?? 0, items: data });
+    }
+
+    // ===================== ВЕБХУКИ (подписки) =====================
+    // POST /webhooks/subscriptions — зарегистрировать подписку
+    if (req.method === "POST" && path === "/webhooks/subscriptions") {
+      if (!need("webhooks:subscribe")) return finish(403, { error: "Forbidden: scope webhooks:subscribe required" });
+      const b = await req.json().catch(() => ({}));
+      const wurl = String(b.url ?? "").trim();
+      if (!wurl) return finish(400, { error: "url required" });
+      const events = Array.isArray(b.events) ? b.events.map((e: unknown) => String(e)) : [];
+      const { data, error } = await db
+        .from("webhook_subscriptions")
+        .insert({ url: wurl, events, secret: b.secret ? String(b.secret) : null, active: true })
+        .select("id, events")
+        .single();
+      if (error) return finish(400, { error: error.message });
+      return finish(201, { id: data.id, status: "active", events: data.events });
+    }
+
+    // GET /webhooks/subscriptions — список подписок
+    if (req.method === "GET" && path === "/webhooks/subscriptions") {
+      if (!need("webhooks:subscribe")) return finish(403, { error: "Forbidden: scope webhooks:subscribe required" });
+      const { data, error } = await db
+        .from("webhook_subscriptions")
+        .select("id, url, events, active, created_at")
+        .order("created_at", { ascending: false });
+      if (error) return finish(500, { error: error.message });
+      return finish(200, { items: data });
+    }
+
+    // DELETE /webhooks/subscriptions/:id — удалить подписку
+    const mSub = path.match(/^\/webhooks\/subscriptions\/([^/]+)$/);
+    if (req.method === "DELETE" && mSub) {
+      if (!need("webhooks:subscribe")) return finish(403, { error: "Forbidden: scope webhooks:subscribe required" });
+      const { error } = await db.from("webhook_subscriptions").delete().eq("id", mSub[1]);
+      if (error) return finish(400, { error: error.message });
+      return finish(200, { status: "deleted" });
     }
 
     return finish(404, { error: "Not Found", path });

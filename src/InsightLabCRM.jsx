@@ -1853,9 +1853,12 @@ function UserEdit({ user, onClose, onSave }) {
 // ---------- Настройки и интеграции (admin) ----------
 const API_SCOPES = [
   { id: "inbound:leads", label: "Приём лидов (запись в CRM)" },
+  { id: "inbound:contacts", label: "Приём контактов" },
+  { id: "inbound:events", label: "Приём событий/действий" },
   { id: "outbound:leads", label: "Чтение лидов" },
   { id: "outbound:pipelines", label: "Чтение воронок и стадий" },
   { id: "outbound:users", label: "Чтение пользователей" },
+  { id: "webhooks:subscribe", label: "Подписка на вебхуки (события CRM)" },
 ];
 
 function IntegrationsPanel() {
@@ -1889,7 +1892,22 @@ function IntegrationsPanel() {
   };
   const revoke = async (id) => { if (!confirm("Отозвать токен? Сервис сразу потеряет доступ.")) return; await integrations.revokeToken(id); await load(); };
   const del = async (id) => { if (!confirm("Удалить токен из списка?")) return; await integrations.deleteToken(id); await load(); };
-  const copy = (text) => { navigator.clipboard?.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 1500); };
+  const copy = async (text) => {
+    let ok = false;
+    try {
+      if (navigator.clipboard && window.isSecureContext) { await navigator.clipboard.writeText(text); ok = true; }
+    } catch { ok = false; }
+    if (!ok) {
+      try {
+        const ta = document.createElement("textarea");
+        ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+        document.body.appendChild(ta); ta.focus(); ta.select();
+        ok = document.execCommand("copy"); document.body.removeChild(ta);
+      } catch { ok = false; }
+    }
+    if (ok) { setCopied(true); setTimeout(() => setCopied(false), 1500); }
+    else alert("Не удалось скопировать автоматически. Выделите токен мышкой и нажмите Cmd+C.");
+  };
 
   const fmt = (d) => d ? new Date(d).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—";
 
@@ -1912,7 +1930,7 @@ function IntegrationsPanel() {
         <div style={{ border: "1px solid " + C.green, background: "#E7F6EE", borderRadius: 12, padding: 14, marginBottom: 16 }}>
           <div style={{ fontSize: 13, fontWeight: 800, color: C.green, marginBottom: 6 }}>Токен создан — скопируйте сейчас, больше он не покажется:</div>
           <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-            <code style={{ flex: 1, minWidth: 0, fontSize: 13, background: "#fff", border: "1px solid " + C.border, borderRadius: 8, padding: "8px 10px", wordBreak: "break-all" }}>{issued}</code>
+            <code onClick={(e) => { const r = document.createRange(); r.selectNodeContents(e.currentTarget); const s = window.getSelection(); s.removeAllRanges(); s.addRange(r); }} style={{ flex: 1, minWidth: 0, fontSize: 13, background: "#fff", border: "1px solid " + C.border, borderRadius: 8, padding: "8px 10px", wordBreak: "break-all", userSelect: "all", cursor: "text" }}>{issued}</code>
             <Btn size="sm" variant="soft" onClick={() => copy(issued)}>{copied ? "Скопировано ✓" : "Копировать"}</Btn>
           </div>
         </div>
@@ -1975,11 +1993,170 @@ function IntegrationsPanel() {
   );
 }
 
+const WEBHOOK_EVENTS = [
+  { id: "lead.created", label: "Лид создан" },
+  { id: "lead.stage_changed", label: "Лид сменил стадию" },
+  { id: "lead.won", label: "Лид выигран" },
+  { id: "lead.lost", label: "Лид проигран" },
+  { id: "lead.assigned", label: "Сменился ответственный" },
+  { id: "lead.updated", label: "Лид изменён" },
+];
+
+function WebhooksPanel() {
+  const [subs, setSubs] = useState(null);
+  const [deliveries, setDeliveries] = useState([]);
+  const [err, setErr] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [url, setUrl] = useState("");
+  const [secret, setSecret] = useState("");
+  const [evs, setEvs] = useState(() => new Set(["lead.created", "lead.stage_changed", "lead.won", "lead.lost"]));
+  const [busy, setBusy] = useState(false);
+
+  const load = async () => {
+    try {
+      setSubs(await integrations.listWebhooks());
+      setDeliveries(await integrations.listDeliveries(20));
+      setErr("");
+    } catch (e) { setErr("Не удалось загрузить вебхуки. Выполните SQL 07_integrations_phase2.sql. (" + e.message + ")"); setSubs([]); }
+  };
+  useEffect(() => { load(); }, []);
+
+  const toggle = (id) => setEvs((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const create = async () => {
+    if (!url.trim() || !evs.size) return;
+    setBusy(true);
+    try { await integrations.createWebhook(url.trim(), [...evs], secret.trim()); setUrl(""); setSecret(""); setCreating(false); await load(); }
+    catch (e) { setErr("Не удалось создать подписку: " + e.message); }
+    setBusy(false);
+  };
+  const del = async (id) => { if (!confirm("Удалить подписку на вебхук?")) return; await integrations.deleteWebhook(id); await load(); };
+  const fmt = (d) => d ? new Date(d).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—";
+
+  return (
+    <Panel style={{ marginTop: 16 }}>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 6 }}>
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 800 }}>Вебхуки (исходящие события)</div>
+          <div style={{ fontSize: 12.5, color: C.faint, marginTop: 2 }}>CRM сама отправит POST на ваш URL при событиях лида. Подпись <code>X-CRM-Signature</code> (HMAC-SHA256).</div>
+        </div>
+        <Btn size="sm" onClick={() => setCreating(true)}>+ Добавить вебхук</Btn>
+      </div>
+
+      {err && <div style={{ fontSize: 12.5, color: C.red, margin: "8px 0" }}>{err}</div>}
+
+      {subs === null ? (
+        <div style={{ fontSize: 13, color: C.faint, padding: "10px 0" }}>Загрузка…</div>
+      ) : subs.length === 0 ? (
+        <div style={{ fontSize: 13, color: C.faint, padding: "10px 0" }}>Подписок пока нет. Добавьте URL — и CRM будет уведомлять его о событиях.</div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 8 }}>
+          {subs.map((s) => (
+            <div key={s.id} style={{ border: "1px solid " + C.border, borderRadius: 10, padding: 12, opacity: s.active ? 1 : 0.6 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontWeight: 700, fontSize: 13, wordBreak: "break-all" }}>{s.url}</div>
+                  <div style={{ display: "flex", gap: 6, marginTop: 7, flexWrap: "wrap" }}>
+                    {(s.events || []).map((e) => <Badge key={e} color={C.blueDark} bg={C.blueLight}>{e}</Badge>)}
+                  </div>
+                  <div style={{ fontSize: 11.5, color: C.faint, marginTop: 7 }}>Создан {fmt(s.created_at)}</div>
+                </div>
+                <Btn size="sm" variant="plain" onClick={() => del(s.id)}>Удалить</Btn>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {deliveries.length > 0 && (
+        <div style={{ marginTop: 16 }}>
+          <div style={{ fontSize: 12.5, fontWeight: 700, color: C.muted, marginBottom: 8 }}>Последние отправки</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            {deliveries.map((d) => (
+              <div key={d.id} style={{ display: "flex", justifyContent: "space-between", gap: 10, fontSize: 12, color: C.faint, padding: "4px 0", borderBottom: "1px solid " + C.border, flexWrap: "wrap" }}>
+                <span><Badge color={C.blueDark} bg={C.blueLight}>{d.event}</Badge> <span style={{ wordBreak: "break-all" }}>{d.webhook_subscriptions?.url || "—"}</span></span>
+                <span>{fmt(d.created_at)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {creating && (
+        <Modal open onClose={() => setCreating(false)} width={480} title="Новый вебхук"
+          footer={<><Btn variant="ghost" onClick={() => setCreating(false)}>Отмена</Btn><Btn onClick={create} disabled={busy || !url.trim() || !evs.size}>{busy ? "Создаём…" : "Создать"}</Btn></>}>
+          <Field label="URL получателя" hint="куда CRM будет слать POST">
+            <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://example.com/webhooks/crm" />
+          </Field>
+          <Field label="Секрет для подписи (необязательно)" hint="им подписывается тело запроса (HMAC-SHA256)">
+            <Input value={secret} onChange={(e) => setSecret(e.target.value)} placeholder="my-webhook-secret" />
+          </Field>
+          <div style={{ fontSize: 13, fontWeight: 700, margin: "8px 0 8px" }}>События</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {WEBHOOK_EVENTS.map((e) => (
+              <label key={e.id} style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", fontSize: 13.5 }}>
+                <input type="checkbox" checked={evs.has(e.id)} onChange={() => toggle(e.id)} />
+                <span>{e.label} <code style={{ fontSize: 11.5, color: C.faint }}>{e.id}</code></span>
+              </label>
+            ))}
+          </div>
+        </Modal>
+      )}
+    </Panel>
+  );
+}
+
+function ApiLogPanel() {
+  const [rows, setRows] = useState(null);
+  const [err, setErr] = useState("");
+  const load = async () => {
+    try { setRows(await integrations.listAudit(50)); setErr(""); }
+    catch (e) { setErr("Не удалось загрузить журнал. (" + e.message + ")"); setRows([]); }
+  };
+  useEffect(() => { load(); }, []);
+  const fmt = (d) => d ? new Date(d).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "—";
+  const statusColor = (s) => s >= 500 ? C.red : s >= 400 ? "#B45309" : C.green;
+  const statusBg = (s) => s >= 500 ? "#FBEAEA" : s >= 400 ? "#FEF3C7" : "#E7F6EE";
+
+  return (
+    <Panel style={{ marginTop: 16 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 8 }}>
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 800 }}>Журнал запросов к API</div>
+          <div style={{ fontSize: 12.5, color: C.faint, marginTop: 2 }}>Последние обращения внешних сервисов к вашему API.</div>
+        </div>
+        <Btn size="sm" variant="ghost" onClick={load}>Обновить</Btn>
+      </div>
+
+      {err && <div style={{ fontSize: 12.5, color: C.red, margin: "8px 0" }}>{err}</div>}
+
+      {rows === null ? (
+        <div style={{ fontSize: 13, color: C.faint, padding: "10px 0" }}>Загрузка…</div>
+      ) : rows.length === 0 ? (
+        <div style={{ fontSize: 13, color: C.faint, padding: "10px 0" }}>Запросов пока не было.</div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          {rows.map((r) => (
+            <div key={r.id} style={{ display: "grid", gridTemplateColumns: "auto auto 1fr auto auto", gap: 10, alignItems: "center", fontSize: 12, padding: "6px 0", borderBottom: "1px solid " + C.border }}>
+              <Badge color={statusColor(r.status)} bg={statusBg(r.status)}>{r.status}</Badge>
+              <span style={{ fontWeight: 700, color: C.muted, minWidth: 44 }}>{r.method}</span>
+              <code style={{ color: C.text, wordBreak: "break-all" }}>{r.path}</code>
+              <span style={{ color: C.faint }}>{r.api_tokens?.name || "—"}</span>
+              <span style={{ color: C.faint, whiteSpace: "nowrap" }}>{fmt(r.created_at)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </Panel>
+  );
+}
+
 function SettingsView({ onReset, isAdmin }) {
   return (
     <div>
       <h2 style={{ margin: "0 0 20px", fontSize: 23, fontWeight: 700, letterSpacing: -0.5 }}>Настройки и интеграции</h2>
       {isAdmin && <IntegrationsPanel />}
+      {isAdmin && <WebhooksPanel />}
+      {isAdmin && <ApiLogPanel />}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginTop: isAdmin ? 16 : 0 }}>
         <Panel>
           <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 4 }}>Telegram-бот</div>
