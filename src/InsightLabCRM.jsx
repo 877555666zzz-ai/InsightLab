@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { createPortal } from "react-dom";
 import * as XLSX from "xlsx";
 import Papa from "papaparse";
 import {
@@ -350,15 +351,15 @@ function Select({ options, ...props }) {
 
 function Modal({ open, onClose, title, children, width = 560, footer }) {
   if (!open) return null;
-  return (
+  return createPortal(
     <div onClick={onClose} style={{
       position: "fixed", inset: 0, background: C.overlay,
       display: "flex", alignItems: "flex-start", justifyContent: "center",
-      zIndex: 1000, padding: "48px 16px", overflowY: "auto",
+      zIndex: 1000, padding: "5vh 16px", overflowY: "auto",
     }}>
       <div onClick={(e) => e.stopPropagation()} style={{
         background: C.surface, backgroundImage: C.sheen, borderRadius: 22, width: "100%", maxWidth: width,
-        boxShadow: C.shadowLg, overflow: "hidden", border: "1px solid " + C.border,
+        boxShadow: C.shadowLg, overflow: "hidden", border: "1px solid " + C.border, margin: "auto",
       }}>
         <div style={{
           display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -370,13 +371,14 @@ function Modal({ open, onClose, title, children, width = 560, footer }) {
             color: C.faint, lineHeight: 1,
           }}>×</button>
         </div>
-        <div style={{ padding: 24, maxHeight: "70vh", overflowY: "auto" }}>{children}</div>
+        <div style={{ padding: 24, maxHeight: "78vh", overflowY: "auto" }}>{children}</div>
         {footer && <div style={{
           padding: "16px 24px", borderTop: "1px solid " + C.border,
           display: "flex", justifyContent: "flex-end", gap: 10, background: C.panel,
         }}>{footer}</div>}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
