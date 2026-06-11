@@ -5,7 +5,7 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
   LineChart, Line, PieChart, Pie, Cell, Legend,
 } from "recharts";
-import { loadDb, persistDb, resetDb, auth } from "./lib/api";
+import { loadDb, persistDb, resetDb, auth, integrations } from "./lib/api";
 import Login from "./Login";
 import { motion, AnimatePresence } from "framer-motion";
 import NocturneBackground from "./components/NocturneBackground";
@@ -1849,11 +1849,136 @@ function UserEdit({ user, onClose, onSave }) {
 }
 
 // ---------- Настройки и интеграции (admin) ----------
-function SettingsView({ onReset }) {
+const API_SCOPES = [
+  { id: "inbound:leads", label: "Приём лидов (запись в CRM)" },
+  { id: "outbound:leads", label: "Чтение лидов" },
+  { id: "outbound:pipelines", label: "Чтение воронок и стадий" },
+  { id: "outbound:users", label: "Чтение пользователей" },
+];
+
+function IntegrationsPanel() {
+  const [tokens, setTokens] = useState(null);
+  const [err, setErr] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [name, setName] = useState("");
+  const [sel, setSel] = useState(() => new Set(["inbound:leads", "outbound:pipelines", "outbound:users"]));
+  const [issued, setIssued] = useState(null); // показанный один раз токен
+  const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const apiBase = (import.meta.env.VITE_SUPABASE_URL || "https://<project>.supabase.co") + "/functions/v1/crm-api";
+
+  const load = async () => {
+    try { setTokens(await integrations.listTokens()); setErr(""); }
+    catch (e) { setErr("Не удалось загрузить токены. Выполните SQL 06_integrations.sql в Supabase. (" + e.message + ")"); setTokens([]); }
+  };
+  useEffect(() => { load(); }, []);
+
+  const toggleScope = (id) => setSel((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+
+  const create = async () => {
+    if (!name.trim() || !sel.size) return;
+    setBusy(true);
+    try {
+      const tok = await integrations.createToken(name.trim(), [...sel]);
+      setIssued(tok); setName(""); setCreating(false); await load();
+    } catch (e) { setErr("Не удалось создать токен: " + e.message); }
+    setBusy(false);
+  };
+  const revoke = async (id) => { if (!confirm("Отозвать токен? Сервис сразу потеряет доступ.")) return; await integrations.revokeToken(id); await load(); };
+  const del = async (id) => { if (!confirm("Удалить токен из списка?")) return; await integrations.deleteToken(id); await load(); };
+  const copy = (text) => { navigator.clipboard?.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 1500); };
+
+  const fmt = (d) => d ? new Date(d).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—";
+
+  return (
+    <Panel style={{ marginTop: 16 }}>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 6 }}>
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 800 }}>Интеграции и API-токены</div>
+          <div style={{ fontSize: 12.5, color: C.faint, marginTop: 2 }}>Подключение внешних сервисов (InsightLab, сайт-форма, любой API) к воронке.</div>
+        </div>
+        <Btn size="sm" onClick={() => { setCreating(true); setIssued(null); }}>+ Добавить токен</Btn>
+      </div>
+
+      <div style={{ fontSize: 12, color: C.muted, background: C.panel, border: "1px solid " + C.border, borderRadius: 10, padding: "10px 12px", margin: "10px 0 16px", wordBreak: "break-all" }}>
+        Базовый URL API: <b style={{ color: C.text }}>{apiBase}</b>
+        <div style={{ marginTop: 4, color: C.faint }}>Пример: <code>POST {apiBase}/inbound/lead</code> с заголовком <code>Authorization: Bearer sk-crm-…</code></div>
+      </div>
+
+      {issued && (
+        <div style={{ border: "1px solid " + C.green, background: "#E7F6EE", borderRadius: 12, padding: 14, marginBottom: 16 }}>
+          <div style={{ fontSize: 13, fontWeight: 800, color: C.green, marginBottom: 6 }}>Токен создан — скопируйте сейчас, больше он не покажется:</div>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <code style={{ flex: 1, minWidth: 0, fontSize: 13, background: "#fff", border: "1px solid " + C.border, borderRadius: 8, padding: "8px 10px", wordBreak: "break-all" }}>{issued}</code>
+            <Btn size="sm" variant="soft" onClick={() => copy(issued)}>{copied ? "Скопировано ✓" : "Копировать"}</Btn>
+          </div>
+        </div>
+      )}
+
+      {err && <div style={{ fontSize: 12.5, color: C.red, marginBottom: 12 }}>{err}</div>}
+
+      {tokens === null ? (
+        <div style={{ fontSize: 13, color: C.faint, padding: "10px 0" }}>Загрузка…</div>
+      ) : tokens.length === 0 ? (
+        <div style={{ fontSize: 13, color: C.faint, padding: "10px 0" }}>Токенов пока нет. Создайте первый — и подключите внешний сервис.</div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {tokens.map((t) => (
+            <div key={t.id} style={{ border: "1px solid " + C.border, borderRadius: 10, padding: 12, opacity: t.revoked ? 0.6 : 1 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    <span style={{ fontWeight: 700, fontSize: 13.5 }}>{t.name}</span>
+                    <code style={{ fontSize: 12, color: C.muted }}>{t.prefix}…</code>
+                    {t.revoked
+                      ? <Badge color={C.red} bg="#FBEAEA">отозван</Badge>
+                      : <Badge color={C.green} bg="#E7F6EE">активен</Badge>}
+                  </div>
+                  <div style={{ display: "flex", gap: 6, marginTop: 7, flexWrap: "wrap" }}>
+                    {(t.scopes || []).map((s) => <Badge key={s} color={C.blueDark} bg={C.blueLight}>{s}</Badge>)}
+                  </div>
+                  <div style={{ fontSize: 11.5, color: C.faint, marginTop: 7 }}>
+                    Создан {fmt(t.created_at)} · Последний запрос: {fmt(t.last_used_at)} · Запросов: {t.request_count ?? 0}
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  {!t.revoked && <Btn size="sm" variant="ghost" onClick={() => revoke(t.id)}>Отозвать</Btn>}
+                  <Btn size="sm" variant="plain" onClick={() => del(t.id)}>Удалить</Btn>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {creating && (
+        <Modal open onClose={() => setCreating(false)} width={480} title="Новый API-токен"
+          footer={<><Btn variant="ghost" onClick={() => setCreating(false)}>Отмена</Btn><Btn onClick={create} disabled={busy || !name.trim() || !sel.size}>{busy ? "Создаём…" : "Создать токен"}</Btn></>}>
+          <Field label="Название" hint="чтобы понимать, какой сервис подключён">
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Напр. InsightLab Лидген" />
+          </Field>
+          <div style={{ fontSize: 13, fontWeight: 700, margin: "8px 0 8px" }}>Права доступа (scopes)</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {API_SCOPES.map((s) => (
+              <label key={s.id} style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", fontSize: 13.5 }}>
+                <input type="checkbox" checked={sel.has(s.id)} onChange={() => toggleScope(s.id)} />
+                <span>{s.label} <code style={{ fontSize: 11.5, color: C.faint }}>{s.id}</code></span>
+              </label>
+            ))}
+          </div>
+        </Modal>
+      )}
+    </Panel>
+  );
+}
+
+function SettingsView({ onReset, isAdmin }) {
   return (
     <div>
-      <h2 style={{ margin: "0 0 20px", fontSize: 22, fontWeight: 800 }}>Настройки и интеграции</h2>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+      <h2 style={{ margin: "0 0 20px", fontSize: 23, fontWeight: 700, letterSpacing: -0.5 }}>Настройки и интеграции</h2>
+      {isAdmin && <IntegrationsPanel />}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginTop: isAdmin ? 16 : 0 }}>
         <Panel>
           <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 4 }}>Telegram-бот</div>
           <div style={{ fontSize: 12.5, color: C.faint, marginBottom: 14 }}>Напоминания о задачах, разборах и интервью.</div>
@@ -2219,7 +2344,7 @@ function CRMApp({ onSignOut }) {
   }
 
   else if (validPage === "users") content = <UsersView users={db.users} onSave={saveLeadUser} />;
-  else if (validPage === "settings") content = <SettingsView onReset={reset} />;
+  else if (validPage === "settings") content = <SettingsView onReset={reset} isAdmin={isAdmin} />;
 
   function saveLeadUser(u) {
     db.users.some((x) => x.id === u.id) ? upd("users", u.id, () => u) : patch({ users: [...db.users, u] });

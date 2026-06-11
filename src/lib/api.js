@@ -170,3 +170,39 @@ export const auth = {
     supabase.auth.signUp({ email, password, options: { data: { name } } }),
   signOut: () => supabase.auth.signOut(),
 };
+
+// ---------- интеграции: API-токены (ТЗ «Двусторонний коннектор») ----------
+async function sha256hex(s) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+export const integrations = {
+  // список токенов (без самого секрета — его нет в БД, только хеш)
+  listTokens: async () => {
+    const { data, error } = await supabase.from("api_tokens")
+      .select("id, name, prefix, scopes, created_at, last_used_at, request_count, revoked, expires_at")
+      .order("created_at", { ascending: false });
+    if (error) throw error;
+    return data || [];
+  },
+  // создать токен: генерим sk-crm-<40hex>, в БД пишем только SHA-256-хеш, возвращаем полный токен ОДИН раз
+  createToken: async (name, scopes) => {
+    const bytes = new Uint8Array(20);
+    crypto.getRandomValues(bytes);
+    const rand = [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
+    const token = "sk-crm-" + rand;
+    const token_hash = await sha256hex(token);
+    const { error } = await supabase.from("api_tokens").insert({ name, prefix: token.slice(0, 14), token_hash, scopes });
+    if (error) throw error;
+    return token;
+  },
+  revokeToken: async (id) => {
+    const { error } = await supabase.from("api_tokens").update({ revoked: true }).eq("id", id);
+    if (error) throw error;
+  },
+  deleteToken: async (id) => {
+    const { error } = await supabase.from("api_tokens").delete().eq("id", id);
+    if (error) throw error;
+  },
+};
