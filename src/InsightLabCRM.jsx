@@ -1879,7 +1879,7 @@ function SettingsView({ onReset }) {
 // App — состояние, persist, маршрутизация по ролям и правам (3.1–3.2)
 // ============================================================================
 
-const PAGE = { background: "transparent", minHeight: "100vh", fontFamily: FONT, color: C.text };
+const PAGE = { background: "transparent", minHeight: "100vh", fontFamily: FONT, color: C.text, zoom: 0.8 };
 const fontStyle = `@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
   * { box-sizing: border-box; } body { margin: 0; }
   ::-webkit-scrollbar { height: 10px; width: 10px; } ::-webkit-scrollbar-track { background: transparent; }
