@@ -14,7 +14,7 @@ import { ThemeProvider, ThemeToggle, useTheme } from "./components/theme";
 import BrandMark from "./components/Logo";
 import {
   BarChart3, Mic, Calendar as CalIcon, TrendingUp, Users as UsersIcon, Settings as SettingsIcon, LayoutDashboard,
-  CalendarDays, Bell as BellIcon,
+  CalendarDays, Bell as BellIcon, Trash2,
 } from "lucide-react";
 import "./nocturne.css";
 
@@ -2337,6 +2337,13 @@ function CRMApp({ onSignOut }) {
   };
   const saveResp = (r) => upd("respondents", r.id, () => r);
   const deleteResps = (ids) => { const s = new Set(ids); patch({ respondents: db.respondents.filter((r) => !s.has(r.id)) }); };
+  // удалить проект целиком (вместе с его респондентами; заметки удалит каскад БД)
+  const deleteProject = (id) => {
+    patch({
+      projects: db.projects.filter((p) => p.id !== id),
+      respondents: db.respondents.filter((r) => r.project !== id),
+    });
+  };
   const saveScript = (projectId, script) => upd("projects", projectId, (p) => ({ ...p, script }));
 
   // ---------- интервью: заметки + завершение ----------
@@ -2486,7 +2493,7 @@ function CRMApp({ onSignOut }) {
           <PageHead title="Рекрутинг" sub="Все проекты доставки">
             <Btn variant="ghost" size="sm" onClick={() => setImportKind({ kind: "resp", projectId: db.projects[0]?.id })}>↑ Импорт респондентов</Btn>
           </PageHead>
-          <ProjectsGrid projects={visibleProjects} users={db.users} respondents={db.respondents} onOpen={setActiveProject} />
+          <ProjectsGrid projects={visibleProjects} users={db.users} respondents={db.respondents} onOpen={setActiveProject} onDelete={isAdmin ? deleteProject : undefined} />
         </div>
       );
     }
@@ -2589,7 +2596,7 @@ function PageHead({ title, sub, children }) {
   );
 }
 
-function ProjectsGrid({ projects, users, respondents, onOpen }) {
+function ProjectsGrid({ projects, users, respondents, onOpen, onDelete }) {
   if (!projects.length) return <EmptyState icon="📁" title="Проектов нет" text="Выиграйте лид в воронке продаж — создастся проект." />;
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(260px,1fr))", gap: 16 }}>
@@ -2601,9 +2608,22 @@ function ProjectsGrid({ projects, users, respondents, onOpen }) {
         return (
           <Panel key={p.id} style={{ cursor: "pointer" }} >
             <div onClick={() => onOpen(p.id)}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10, gap: 8 }}>
                 <div style={{ fontWeight: 800, fontSize: 16 }}>{p.client}</div>
-                <Badge>{p.pkg}</Badge>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                  <Badge>{p.pkg}</Badge>
+                  {onDelete && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); if (confirm(`Удалить проект «${p.client}»?\n\nБудут безвозвратно удалены сам проект и все его респонденты (${pr.length} шт.) вместе с заметками. Это действие нельзя отменить.`)) onDelete(p.id); }}
+                      title="Удалить проект"
+                      onMouseEnter={(e) => { e.currentTarget.style.color = C.red; e.currentTarget.style.borderColor = C.red; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.color = C.faint; e.currentTarget.style.borderColor = C.border; }}
+                      style={{ width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid " + C.border, background: C.surface, borderRadius: 8, cursor: "pointer", color: C.faint, padding: 0, transition: "color .15s, border-color .15s" }}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  )}
+                </div>
               </div>
               <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>
                 <Badge color={p.mode === "A" ? C.blueDark : C.amber} bg={p.mode === "A" ? C.blueLight : "#FFF6E9"}>Режим {p.mode}</Badge>
