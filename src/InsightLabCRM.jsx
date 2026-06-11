@@ -2127,6 +2127,7 @@ function CRMApp({ onSignOut }) {
     );
     content = (
       <>
+        <div style={{ maxWidth: 1280 }}>
         <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 22, flexWrap: "wrap", gap: 14 }}>
           <div>
             <h2 style={{ margin: 0, fontSize: 32, fontWeight: 700, letterSpacing: -0.9, color: C.text }}>Продажи</h2>
@@ -2148,6 +2149,7 @@ function CRMApp({ onSignOut }) {
           <Kpi label="Пайплайн" value={mln(_pipeline)} sub={_act.length + " активных"} />
           <Kpi label="Выручка" value={mln(_revenue)} accent={C.indigo} sub={_won.length + " закрыто"} />
           <Kpi label="Средний чек" value={mln(_avg)} sub="по сделкам" grad />
+        </div>
         </div>
         <KanbanBoard stages={SALES_STAGES} items={displayLeads} getStage={(l) => l.stage} renderCard={leadCard} onMove={moveLead}
           dotColor={stageColor} onDelete={deleteLeads}
