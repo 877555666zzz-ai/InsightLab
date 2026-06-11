@@ -13,6 +13,7 @@ import { ThemeProvider, ThemeToggle, useTheme } from "./components/theme";
 import BrandMark from "./components/Logo";
 import {
   BarChart3, Mic, Calendar as CalIcon, TrendingUp, Users as UsersIcon, Settings as SettingsIcon, LayoutDashboard,
+  CalendarDays, Bell as BellIcon,
 } from "lucide-react";
 import "./nocturne.css";
 
@@ -396,9 +397,14 @@ function StatCard({ label, value, sub, accent }) {
 }
 
 function EmptyState({ icon, title, text }) {
+  const isNode = icon && typeof icon !== "string";
   return (
     <div style={{ textAlign: "center", padding: "48px 20px", color: C.faint }}>
-      <div style={{ fontSize: 34, marginBottom: 10 }}>{icon}</div>
+      {isNode ? (
+        <div style={{ width: 54, height: 54, margin: "0 auto 12px", borderRadius: 15, display: "grid", placeItems: "center", background: C.panel, border: "1px solid " + C.border, color: C.muted }}>{icon}</div>
+      ) : (
+        <div style={{ fontSize: 34, marginBottom: 10 }}>{icon}</div>
+      )}
       <div style={{ fontWeight: 700, color: C.muted, marginBottom: 4 }}>{title}</div>
       {text && <div style={{ fontSize: 13 }}>{text}</div>}
     </div>
@@ -620,6 +626,7 @@ function Logo() {
 // ---------- Header с переключателем роли (демонстрация 3 интерфейсов) ----------
 function Header({ user, users, onSwitchUser, nav, current, onNav, query, setQuery }) {
   const initials = (user.name || "?").split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
+  const [userMenu, setUserMenu] = useState(false);
   return (
     <header style={{
       background: C.glass, backdropFilter: "blur(18px) saturate(140%)", WebkitBackdropFilter: "blur(18px) saturate(140%)",
@@ -660,21 +667,35 @@ function Header({ user, users, onSwitchUser, nav, current, onNav, query, setQuer
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.7 21a2 2 0 0 1-3.4 0" /></svg>
           <span style={{ position: "absolute", top: 9, right: 10, width: 7, height: 7, borderRadius: 7, background: C.amber, boxShadow: "0 0 0 2px " + C.glass }} />
         </button>
-        {/* аватар = переключатель роли (прозрачный select поверх), логика сохранена */}
-        <div title={user.name + " · " + ROLES[user.role]} style={{ position: "relative", width: 40, height: 40, flexShrink: 0 }}>
-          <div style={{
-            width: 40, height: 40, borderRadius: "50%", display: "grid", placeItems: "center",
-            fontSize: 13.5, fontWeight: 700, color: "#fff", letterSpacing: 0.3,
-            background: "linear-gradient(140deg,#5B5BFF,#7A7AFF)",
-            boxShadow: "0 4px 12px -3px rgba(45,45,90,0.45), inset 0 1px 0 rgba(255,255,255,0.35)",
-          }}>{initials}</div>
-          {users.length > 1 && (
-            <select value={user.id} onChange={(e) => onSwitchUser(e.target.value)} title="Переключить роль (демо)"
-              style={{ position: "absolute", inset: 0, width: "100%", height: "100%", opacity: 0, cursor: "pointer", border: "none", borderRadius: "50%" }}>
-              {users.filter((u) => u.active).map((u) => (
-                <option key={u.id} value={u.id}>{ROLES[u.role]} — {u.name}</option>
-              ))}
-            </select>
+        {/* аватар → меню смены пользователя */}
+        <div style={{ position: "relative", flexShrink: 0 }}>
+          <button onClick={() => setUserMenu((v) => !v)} title={user.name + " · " + ROLES[user.role]}
+            style={{ width: 40, height: 40, borderRadius: "50%", display: "grid", placeItems: "center",
+              fontSize: 13.5, fontWeight: 700, color: "#fff", letterSpacing: 0.3, border: "none", cursor: "pointer", padding: 0,
+              background: "linear-gradient(140deg,#5B5BFF,#7A7AFF)",
+              boxShadow: "0 4px 12px -3px rgba(45,45,90,0.45), inset 0 1px 0 rgba(255,255,255,0.35)" }}>{initials}</button>
+          {userMenu && (
+            <>
+              <div onClick={() => setUserMenu(false)} style={{ position: "fixed", inset: 0, zIndex: 60 }} />
+              <div style={{ position: "absolute", top: 48, right: 0, zIndex: 61, minWidth: 240,
+                background: C.surface, border: "1px solid " + C.border, borderRadius: 14, boxShadow: C.shadowLg, overflow: "hidden" }}>
+                <div style={{ padding: "12px 14px 8px", fontSize: 11, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", color: C.faint }}>Сменить пользователя</div>
+                {users.filter((u) => u.active).map((u) => (
+                  <button key={u.id} onClick={() => { onSwitchUser(u.id); setUserMenu(false); }}
+                    style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", textAlign: "left",
+                      padding: "10px 14px", border: "none", cursor: "pointer", fontFamily: FONT,
+                      background: u.id === user.id ? C.blueSoft : "transparent" }}>
+                    <span style={{ width: 30, height: 30, borderRadius: "50%", flexShrink: 0, display: "grid", placeItems: "center", fontSize: 11.5, fontWeight: 700, color: "#fff", background: "linear-gradient(140deg,#5B5BFF,#7A7AFF)" }}>
+                      {(u.name || "?").split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase()}
+                    </span>
+                    <span style={{ minWidth: 0 }}>
+                      <span style={{ display: "block", fontSize: 13.5, fontWeight: 600, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{u.name}</span>
+                      <span style={{ display: "block", fontSize: 11.5, color: C.muted }}>{ROLES[u.role]}{u.id === user.id ? " · текущий" : ""}</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </>
           )}
         </div>
       </div>
@@ -704,9 +725,70 @@ function KanbanCard({ children, onDragStart, onClick, accent }) {
   );
 }
 
-function KanbanBoard({ stages, items, getStage, renderCard, onMove, sideStages, dotColor, onAddToStage }) {
+function KanbanScroller({ children }) {
+  const ref = useRef(null);
+  const raf = useRef(null);
+  const dir = useRef(0);
+  const [canL, setCanL] = useState(false);
+  const [canR, setCanR] = useState(false);
+  const refresh = () => {
+    const el = ref.current; if (!el) return;
+    setCanL(el.scrollLeft > 4);
+    setCanR(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+  };
+  useEffect(() => {
+    refresh();
+    const onUp = () => { dir.current = 0; };
+    window.addEventListener("dragend", onUp);
+    window.addEventListener("drop", onUp);
+    return () => { window.removeEventListener("dragend", onUp); window.removeEventListener("drop", onUp); if (raf.current) cancelAnimationFrame(raf.current); };
+  }, []);
+  const loop = () => {
+    const el = ref.current;
+    if (el && dir.current) { el.scrollLeft += dir.current * 16; refresh(); raf.current = requestAnimationFrame(loop); }
+    else { raf.current = null; }
+  };
+  const onDragOver = (e) => {
+    const el = ref.current; if (!el) return;
+    const r = el.getBoundingClientRect();
+    const x = e.clientX - r.left, edge = 90;
+    dir.current = x < edge ? -1 : x > r.width - edge ? 1 : 0;
+    if (dir.current && !raf.current) raf.current = requestAnimationFrame(loop);
+  };
+  const arrow = (d) => () => { ref.current?.scrollBy({ left: d * 320, behavior: "smooth" }); setTimeout(refresh, 350); };
+  const arrowBtn = (d, show) => (
+    <button onClick={arrow(d)} disabled={!show} aria-label={d < 0 ? "Прокрутить влево" : "Прокрутить вправо"} style={{
+      flexShrink: 0, width: 34, height: 34, alignSelf: "center", borderRadius: 999,
+      border: "1px solid " + C.borderStrong, background: C.surface, color: show ? C.text : C.faint,
+      cursor: show ? "pointer" : "default", opacity: show ? 1 : 0.35, fontSize: 17, lineHeight: 1,
+      boxShadow: C.shadow, transition: "opacity .15s",
+    }}>{d < 0 ? "‹" : "›"}</button>
+  );
+  return (
+    <div style={{ display: "flex", gap: 8, alignItems: "stretch" }}>
+      {arrowBtn(-1, canL)}
+      <div ref={ref} onDragOver={onDragOver} onScroll={refresh}
+        style={{ display: "flex", gap: 16, overflowX: "auto", paddingBottom: 8, flex: 1, scrollBehavior: "smooth" }}>
+        {children}
+      </div>
+      {arrowBtn(1, canR)}
+    </div>
+  );
+}
+
+function KanbanBoard({ stages, items, getStage, renderCard, onMove, sideStages, dotColor, onAddToStage, onDelete }) {
   const [over, setOver] = useState(null);
+  const [selMode, setSelMode] = useState(false);
+  const [sel, setSel] = useState(() => new Set());
+  const [moveTo, setMoveTo] = useState("");
   const colItems = (sid) => items.filter((it) => getStage(it) === sid);
+  const allStages = [...stages, ...(sideStages || [])];
+  const toggle = (id) => setSel((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const selectAll = () => setSel(new Set(items.map((it) => it.id)));
+  const clearSel = () => { setSel(new Set()); setMoveTo(""); };
+  const exitSel = () => { setSelMode(false); clearSel(); };
+  const bulkMove = (sid) => { if (!sid) return; sel.forEach((id) => onMove(id, sid)); clearSel(); };
+  const bulkDelete = () => { if (!sel.size) return; if (!confirm("Удалить выбранные карточки (" + sel.size + ")? Действие необратимо.")) return; onDelete && onDelete([...sel]); clearSel(); };
   const onDrop = (sid) => (e) => {
     e.preventDefault();
     const id = e.dataTransfer.getData("id");
@@ -733,13 +815,27 @@ function KanbanBoard({ stages, items, getStage, renderCard, onMove, sideStages, 
       <div style={{
         minHeight: 46, borderRadius: C.rTile, padding: over === st.id ? 8 : 0,
         background: over === st.id ? "var(--g-col-over)" : "transparent",
-        outline: over === st.id ? "1.5px dashed " + C.blue : "1.5px dashed transparent",
-        transition: "background .15s, outline-color .15s, padding .15s",
+        transition: "background .15s, padding .15s",
       }}>
-        {colItems(st.id).map((it) =>
-          renderCard(it, (e) => e.dataTransfer.setData("id", it.id))
-        )}
-        {onAddToStage && (
+        {colItems(st.id).map((it) => {
+          const card = renderCard(it, (e) => e.dataTransfer.setData("id", it.id));
+          if (!selMode) return card;
+          const isSel = sel.has(it.id);
+          return (
+            <div key={it.id} style={{ position: "relative" }}>
+              {card}
+              <div onClick={(e) => { e.stopPropagation(); toggle(it.id); }}
+                style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 12, borderRadius: 16, cursor: "pointer",
+                  background: isSel ? "color-mix(in srgb, " + C.blue + " 14%, transparent)" : "transparent",
+                  border: "2px solid " + (isSel ? C.blue : "transparent") }}>
+                <span style={{ position: "absolute", top: 10, right: 10, width: 22, height: 22, borderRadius: 6,
+                  border: "2px solid " + (isSel ? C.blue : C.borderStrong), background: isSel ? C.blue : C.surface,
+                  color: "#fff", display: "grid", placeItems: "center", fontSize: 14, fontWeight: 800 }}>{isSel ? "✓" : ""}</span>
+              </div>
+            </div>
+          );
+        })}
+        {onAddToStage && !selMode && (
           <button onClick={() => onAddToStage(st.id)} className="add-plate" style={{ marginTop: 2 }}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
             Добавить
@@ -751,15 +847,29 @@ function KanbanBoard({ stages, items, getStage, renderCard, onMove, sideStages, 
   };
   return (
     <div>
-      <div style={{ display: "flex", gap: 16, overflowX: "auto", paddingBottom: 8 }}>
-        {stages.map((s) => Column(s, false))}
-      </div>
+      {onDelete && (
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
+          {!selMode ? (
+            <Btn variant="ghost" size="sm" onClick={() => setSelMode(true)}>Выбрать</Btn>
+          ) : (
+            <>
+              <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Выбрано: {sel.size}</span>
+              <Btn variant="ghost" size="sm" onClick={selectAll}>Выбрать все</Btn>
+              <Btn variant="ghost" size="sm" onClick={clearSel}>Снять</Btn>
+              <Select value={moveTo} onChange={(e) => bulkMove(e.target.value)}
+                options={[{ value: "", label: "Перенести в…" }, ...allStages.map((s) => ({ value: s.id, label: s.title }))]}
+                style={{ width: 190 }} disabled={!sel.size} />
+              <Btn variant="danger" size="sm" onClick={bulkDelete} disabled={!sel.size}>Удалить ({sel.size})</Btn>
+              <Btn variant="plain" size="sm" onClick={exitSel}>Выход</Btn>
+            </>
+          )}
+        </div>
+      )}
+      <KanbanScroller>{stages.map((s) => Column(s, false))}</KanbanScroller>
       {sideStages && (
         <div style={{ marginTop: 16 }}>
           <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, marginBottom: 8 }}>Боковые статусы</div>
-          <div style={{ display: "flex", gap: 16, overflowX: "auto", paddingBottom: 8 }}>
-            {sideStages.map((s) => Column(s, true))}
-          </div>
+          <KanbanScroller>{sideStages.map((s) => Column(s, true))}</KanbanScroller>
         </div>
       )}
     </div>
@@ -1021,7 +1131,7 @@ function RespCard(resp, onDragStart, onClick) {
 
 // ---------- ProjectView (вид по одному проекту, 3.5б) ----------
 function ProjectView({ project, users, respondents, canEditScript, canConduct,
-  onMoveResp, onOpenResp, onSaveScript, onBack }) {
+  onMoveResp, onOpenResp, onSaveScript, onBack, onDeleteResp }) {
   const [tab, setTab] = useState("overview");
   const projResp = respondents.filter((r) => r.project === project.id);
   const doneCount = projResp.filter((r) => r.stage === "done" || r.stage === "insight").length;
@@ -1067,7 +1177,7 @@ function ProjectView({ project, users, respondents, canEditScript, canConduct,
       {tab === "overview" && (
         projResp.length
           ? <KanbanBoard stages={RECRUIT_STAGES} items={projResp} getStage={(r) => r.stage}
-              renderCard={(r, ds) => RespCard(r, ds, () => onOpenResp(r))} onMove={onMoveResp} />
+              renderCard={(r, ds) => RespCard(r, ds, () => onOpenResp(r))} onMove={onMoveResp} onDelete={onDeleteResp} />
           : <EmptyState icon="👥" title="Респондентов пока нет" text="Импортируйте список во вкладке «Импорт/Экспорт»." />
       )}
       {tab === "script" && <ScriptTab project={project} canEdit={canEditScript} onSaveScript={onSaveScript} />}
@@ -1347,7 +1457,7 @@ function CalendarView({ user, tasks, respondents, leads, reminders, onToggleRemi
 
   return (
     <div>
-      <h2 style={{ margin: "0 0 16px", fontSize: 22, fontWeight: 800 }}>Календарь и напоминания</h2>
+      <h2 style={{ margin: "0 0 16px", fontSize: 23, fontWeight: 700, letterSpacing: -0.5 }}>Календарь и напоминания</h2>
       <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 16 }}>
         <Panel>
           <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>Ближайшая неделя</div>
@@ -1375,7 +1485,7 @@ function CalendarView({ user, tasks, respondents, leads, reminders, onToggleRemi
               <span style={{ flex: 1, fontSize: 13.5 }}>{e.title}</span>
               <span style={{ fontSize: 12, color: C.faint }}>{fmtDateTime(e.when)}</span>
             </div>
-          )) : <EmptyState icon="🗓" title="Событий нет" />}
+          )) : <EmptyState icon={<CalendarDays size={24} strokeWidth={1.7} />} title="Событий нет" />}
         </Panel>
 
         <Panel>
@@ -1399,7 +1509,7 @@ function CalendarView({ user, tasks, respondents, leads, reminders, onToggleRemi
               </div>
             </div>
           ))}
-          {!myReminders.length && <EmptyState icon="🔔" title="Напоминаний нет" />}
+          {!myReminders.length && <EmptyState icon={<BellIcon size={24} strokeWidth={1.7} />} title="Напоминаний нет" />}
         </Panel>
       </div>
     </div>
@@ -1637,10 +1747,10 @@ function UsersView({ users, onSave }) {
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-        <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>Пользователи</h2>
+        <h2 style={{ margin: 0, fontSize: 23, fontWeight: 700, letterSpacing: -0.5 }}>Пользователи</h2>
         <Btn onClick={() => setEdit({ id: uid("u"), name: "", role: "interviewer", telegram_id: "", email: "", active: true })}>+ Добавить</Btn>
       </div>
-      <Panel pad={0}>
+      <Panel pad={0} style={{ overflow: "hidden" }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead><tr style={{ background: C.panel }}>
             {["Имя", "Роль", "Telegram", "Email", "Статус", ""].map((h) => (
@@ -1831,6 +1941,7 @@ function CRMApp({ onSignOut }) {
     if (stage === "won") { const l = db.leads.find((x) => x.id === id); if (l) setConvertLead({ ...l, stage }); }
   };
   const saveLead = (l) => db.leads.some((x) => x.id === l.id) ? upd("leads", l.id, () => l) : patch({ leads: [...db.leads, l] });
+  const deleteLeads = (ids) => { const s = new Set(ids); patch({ leads: db.leads.filter((l) => !s.has(l.id)) }); };
   const createProjectFromLead = (lead, form) => {
     const proj = {
       id: uid("proj"), client: form.client, pkg: form.pkg, price: form.price,
@@ -1855,6 +1966,7 @@ function CRMApp({ onSignOut }) {
     });
   };
   const saveResp = (r) => upd("respondents", r.id, () => r);
+  const deleteResps = (ids) => { const s = new Set(ids); patch({ respondents: db.respondents.filter((r) => !s.has(r.id)) }); };
   const saveScript = (projectId, script) => upd("projects", projectId, (p) => ({ ...p, script }));
 
   // ---------- интервью: заметки + завершение ----------
@@ -1962,7 +2074,7 @@ function CRMApp({ onSignOut }) {
       <>
         <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 22, flexWrap: "wrap", gap: 14 }}>
           <div>
-            <h2 style={{ margin: 0, fontSize: 32, fontWeight: 800, letterSpacing: -0.6, color: C.text }}>Продажи</h2>
+            <h2 style={{ margin: 0, fontSize: 32, fontWeight: 700, letterSpacing: -0.9, color: C.text }}>Продажи</h2>
             <div style={{ fontSize: 14.5, color: C.muted, marginTop: 6 }}>Воронка лидов · {_act.length} активных сделок на {mln(_pipeline)}</div>
           </div>
           <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
@@ -1983,7 +2095,7 @@ function CRMApp({ onSignOut }) {
           <Kpi label="Средний чек" value={mln(_avg)} sub="по сделкам" grad />
         </div>
         <KanbanBoard stages={SALES_STAGES} items={displayLeads} getStage={(l) => l.stage} renderCard={leadCard} onMove={moveLead}
-          dotColor={stageColor}
+          dotColor={stageColor} onDelete={deleteLeads}
           onAddToStage={(stage) => setOpenLead({ id: uid("lead"), company: "", contact: "", title: "", phone: "", email: "", source: "LinkedIn", stage, owner: userId, nextTouch: todayISO(), amount: 0, notes: "", history: [] })} />
       </>
     );
@@ -1994,7 +2106,7 @@ function CRMApp({ onSignOut }) {
       const p = projectById(activeProject);
       content = <ProjectView project={p} users={db.users} respondents={db.respondents}
         canEditScript={true} canConduct={true}
-        onMoveResp={moveResp} onOpenResp={setOpenResp}
+        onMoveResp={moveResp} onOpenResp={setOpenResp} onDeleteResp={deleteResps}
         onSaveScript={(s) => saveScript(p.id, s)} onBack={() => setActiveProject(null)} />;
     } else {
       content = (
@@ -2018,7 +2130,7 @@ function CRMApp({ onSignOut }) {
           </div>
           <ProjectView project={p} users={db.users} respondents={db.respondents}
             canEditScript={false} canConduct={true}
-            onMoveResp={moveResp} onOpenResp={setOpenResp}
+            onMoveResp={moveResp} onOpenResp={setOpenResp} onDeleteResp={deleteResps}
             onSaveScript={(s) => saveScript(p.id, s)} onBack={() => setActiveProject(null)} />
         </>
       );
@@ -2059,7 +2171,7 @@ function CRMApp({ onSignOut }) {
         Выйти
       </button>
       <Header user={user} users={isAdmin ? db.users : [user]} onSwitchUser={switchUser} nav={nav} current={validPage} onNav={(p) => { setPage(p); setActiveProject(null); }} query={salesQuery} setQuery={setSalesQuery} />
-      <main style={{ maxWidth: 1280, margin: "0 auto", padding: "26px 24px 80px" }}>{content}</main>
+      <main style={{ maxWidth: "100%", margin: 0, padding: "26px 24px 80px" }}>{content}</main>
 
       {/* Модалки */}
       {openLead && (
@@ -2097,7 +2209,7 @@ function PageHead({ title, sub, children }) {
   return (
     <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 18, flexWrap: "wrap", gap: 12 }}>
       <div>
-        <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.text }}>{title}</h2>
+        <h2 style={{ margin: 0, fontSize: 23, fontWeight: 700, letterSpacing: -0.5, color: C.text }}>{title}</h2>
         {sub && <div style={{ fontSize: 13, color: C.muted, marginTop: 3 }}>{sub}</div>}
       </div>
       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>{children}</div>

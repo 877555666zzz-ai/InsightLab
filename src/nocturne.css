@@ -21,10 +21,10 @@
   --c-text:#E6EDF5;
   --c-muted:#9DABC0;
   --c-faint:#6B7A91;
-  --c-blue:#2D9CDB;
-  --c-blue-dark:#1F86C2;
-  --c-blue-light:rgba(45,156,219,0.16);   /* highlight wash */
-  --c-blue-soft:rgba(45,156,219,0.14);
+  --c-blue:#8B8BFF;
+  --c-blue-dark:#6E6EF0;
+  --c-blue-light:rgba(139,139,255,0.18);   /* highlight wash */
+  --c-blue-soft:rgba(139,139,255,0.16);
   --c-border:rgba(255,255,255,0.08);
   --c-border-strong:rgba(255,255,255,0.14);
   --c-surface:#151D2D;                     /* solid card */
@@ -35,36 +35,36 @@
   --c-indigo:#8B8BFF;                       /* Lumen indigo accent (dark) */
   --c-pill-bg:#F4F5FA;                       /* primary pill = near-white on dark */
   --c-pill-ink:#0A0A0B;
-  --c-glow:rgba(45,156,219,0.45);
+  --c-glow:rgba(139,139,255,0.45);
   --c-shadow:0 1px 2px rgba(0,0,0,0.30), 0 4px 14px -6px rgba(0,0,0,0.50);
   --c-shadow-md:0 12px 34px -12px rgba(0,0,0,0.62), 0 2px 8px rgba(0,0,0,0.35);
   --c-shadow-lg:0 30px 80px -24px rgba(0,0,0,0.72);
   --c-card-sheen:linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0) 42%);
-  --c-ring:rgba(45,156,219,0.18);          /* focus ring wash */
+  --c-ring:rgba(139,139,255,0.18);          /* focus ring wash */
   /* nav/header glass (denser, for sticky bars) */
   --c-glass:rgba(18,26,40,0.72);
   --c-glass-border:rgba(255,255,255,0.08);
   --c-glass-blur:18px;
   --c-on-accent:#04101c;                   /* text on blue/green buttons */
   /* ---- TRUE GLASS (transparent cards on colored blobs) ---- */
-  --g-card:rgba(255,255,255,0.085);        /* card fill — see-through frost */
-  --g-strong:rgba(20,28,44,0.55);          /* denser pad under dense text */
-  --g-border:rgba(255,255,255,0.18);       /* bright glass rim */
-  --g-rim-top:rgba(255,255,255,0.55);
-  --g-highlight:inset 0 1px 0 rgba(255,255,255,0.14);
-  --g-blur:24px;
-  --g-shadow:0 10px 34px rgba(0,0,0,0.46);
-  --g-shadow-hi:0 18px 48px rgba(0,0,0,0.60);
-  --g-col:rgba(255,255,255,0.035);         /* kanban column tint (softer) */
-  --g-col-border:rgba(255,255,255,0.07);
-  --g-col-over:rgba(99,102,241,0.16);      /* column drop-hover */
+  --g-card:rgba(255,255,255,0.10);         /* card fill — frost with presence */
+  --g-strong:rgba(20,28,44,0.62);          /* denser pad under dense text */
+  --g-border:rgba(255,255,255,0.16);       /* glass rim */
+  --g-rim-top:rgba(255,255,255,0.60);
+  --g-highlight:inset 0 1px 0 rgba(255,255,255,0.12);
+  --g-blur:22px;
+  --g-shadow:0 14px 40px -8px rgba(0,0,0,0.50);
+  --g-shadow-hi:0 24px 60px -12px rgba(0,0,0,0.62);
+  --g-col:rgba(255,255,255,0.045);         /* kanban column tint (softer) */
+  --g-col-border:rgba(255,255,255,0.08);
+  --g-col-over:rgba(120,110,255,0.18);     /* column drop-hover */
   /* vivid colored mesh blobs — refract through the glass */
   --c-blobs:
-    radial-gradient(42% 44% at 6% 8%,   rgba(99,102,241,0.55), transparent 70%),
-    radial-gradient(38% 40% at 96% 10%, rgba(34,158,217,0.42), transparent 70%),
-    radial-gradient(46% 48% at 86% 92%, rgba(139,92,246,0.50), transparent 72%),
-    radial-gradient(44% 46% at 8% 94%,  rgba(20,184,166,0.36), transparent 72%),
-    radial-gradient(40% 42% at 54% 50%, rgba(45,156,219,0.20), transparent 68%);
+    radial-gradient(44% 46% at 4% 6%,   rgba(99,91,255,0.55),  transparent 70%),
+    radial-gradient(40% 42% at 98% 8%,  rgba(72,120,240,0.42), transparent 70%),
+    radial-gradient(48% 50% at 88% 94%, rgba(150,110,245,0.50),transparent 72%),
+    radial-gradient(44% 46% at 6% 96%,  rgba(40,180,190,0.34), transparent 72%),
+    radial-gradient(42% 44% at 54% 50%, rgba(110,100,255,0.18),transparent 68%);
   --c-overlay:rgba(6,10,18,0.62);          /* modal backdrop */
   --c-hint-bg:rgba(224,169,59,0.10);       /* interviewer hint box */
   --c-hint-bd:rgba(224,169,59,0.28);
@@ -79,10 +79,10 @@
   --c-text:#1C2433;
   --c-muted:#65728A;
   --c-faint:#94A1B4;
-  --c-blue:#2D9CDB;
-  --c-blue-dark:#1F86C2;
-  --c-blue-light:#E9F3FB;
-  --c-blue-soft:#EEF5FB;
+  --c-blue:#5B5BFF;
+  --c-blue-dark:#4A43DB;
+  --c-blue-light:#ECEBFF;
+  --c-blue-soft:#F1F0FF;
   --c-border:#E7ECF3;
   --c-border-strong:#D7DEE9;
   --c-surface:#FFFFFF;
@@ -93,36 +93,36 @@
   --c-indigo:#5B5BFF;                       /* Lumen indigo accent (light) */
   --c-pill-bg:#0A0A0B;                       /* primary pill = black on light */
   --c-pill-ink:#FFFFFF;
-  --c-glow:rgba(45,156,219,0.30);
+  --c-glow:rgba(91,91,255,0.30);
   --c-shadow:0 1px 2px rgba(28,46,82,0.05), 0 4px 14px -6px rgba(28,46,82,0.10);
   --c-shadow-md:0 14px 34px -14px rgba(28,46,82,0.18), 0 4px 12px -6px rgba(28,46,82,0.08);
   --c-shadow-lg:0 30px 70px -26px rgba(28,46,82,0.28);
   --c-card-sheen:linear-gradient(180deg, rgba(255,255,255,0.9), rgba(255,255,255,0) 40%);
-  --c-ring:rgba(45,156,219,0.16);
+  --c-ring:rgba(91,91,255,0.16);
   /* nav/header glass (denser, for sticky bars) */
   --c-glass:rgba(255,255,255,0.72);
   --c-glass-border:rgba(45,80,120,0.10);
   --c-glass-blur:14px;
   --c-on-accent:#FFFFFF;
   /* ---- TRUE GLASS (transparent cards on colored blobs) ---- */
-  --g-card:rgba(255,255,255,0.20);         /* frosted, lets color tint through */
-  --g-strong:rgba(255,255,255,0.55);       /* denser pad under dense text */
-  --g-border:rgba(255,255,255,0.65);       /* bright glass rim */
-  --g-rim-top:rgba(255,255,255,0.95);
-  --g-highlight:inset 0 1px 0 rgba(255,255,255,0.6);
-  --g-blur:22px;
-  --g-shadow:0 10px 34px rgba(30,30,60,0.13);
-  --g-shadow-hi:0 18px 50px rgba(30,30,60,0.20);
-  --g-col:rgba(255,255,255,0.10);          /* kanban column tint (softer) */
-  --g-col-border:rgba(255,255,255,0.45);
-  --g-col-over:rgba(91,91,255,0.12);       /* column drop-hover */
+  --g-card:rgba(255,255,255,0.55);         /* premium frost — crisp text, hint of color */
+  --g-strong:rgba(255,255,255,0.74);       /* denser pad under dense text */
+  --g-border:rgba(255,255,255,0.75);       /* bright glass rim */
+  --g-rim-top:rgba(255,255,255,0.98);
+  --g-highlight:inset 0 1px 0 rgba(255,255,255,0.72);
+  --g-blur:20px;
+  --g-shadow:0 12px 36px -10px rgba(40,44,98,0.16);
+  --g-shadow-hi:0 22px 56px -14px rgba(40,44,98,0.24);
+  --g-col:rgba(255,255,255,0.38);          /* frosted column — clearly visible */
+  --g-col-border:rgba(255,255,255,0.55);
+  --g-col-over:rgba(91,91,255,0.14);       /* column drop-hover */
   /* vivid pastel mesh blobs — refract through the glass */
   --c-blobs:
-    radial-gradient(40% 42% at 5% 8%,   rgba(124,92,255,0.50), transparent 70%),
-    radial-gradient(36% 40% at 97% 6%,  rgba(45,156,219,0.46), transparent 70%),
-    radial-gradient(46% 48% at 86% 94%, rgba(167,139,250,0.48), transparent 72%),
-    radial-gradient(42% 44% at 8% 96%,  rgba(46,196,182,0.40), transparent 72%),
-    radial-gradient(48% 50% at 52% 46%, rgba(91,91,255,0.16), transparent 66%);
+    radial-gradient(42% 46% at 0% 0%,    rgba(99,91,255,0.55),  transparent 68%),
+    radial-gradient(40% 44% at 100% 2%,  rgba(82,150,255,0.48), transparent 68%),
+    radial-gradient(48% 52% at 90% 100%, rgba(159,122,234,0.52),transparent 70%),
+    radial-gradient(46% 50% at 2% 100%,  rgba(56,196,200,0.40), transparent 70%),
+    radial-gradient(62% 62% at 50% 44%,  rgba(120,110,255,0.16),transparent 64%);
   --c-overlay:rgba(45,45,45,0.42);
   --c-hint-bg:#FFF6E9;
   --c-hint-bd:#F4D9AE;
@@ -227,7 +227,7 @@ body::before{
 .n-btn:active{transform:translateY(1px) scale(.99);}
 .n-btn-primary{background:linear-gradient(180deg,#34a6e6,var(--c-blue));color:var(--c-on-accent);font-weight:700;
   box-shadow:0 8px 26px -8px rgba(45,156,219,0.5),inset 0 1px 0 rgba(255,255,255,0.35);}
-.n-btn-primary:hover{box-shadow:0 0 24px 1px var(--c-glow),0 10px 30px -6px rgba(45,156,219,0.6);transform:translateY(-1px);}
+.n-btn-primary:hover{box-shadow:0 0 24px 1px var(--c-glow),0 10px 30px -6px rgba(91,91,255,0.55);transform:translateY(-1px);}
 .n-btn-ghost{background:transparent;color:var(--c-text);border:1px solid var(--c-border-strong);}
 .n-btn-ghost:hover{background:var(--c-blue-soft);border-color:rgba(45,156,219,0.45);}
 .n-btn-green{background:linear-gradient(180deg,#4ccb8e,var(--c-green));color:var(--c-on-accent);font-weight:700;box-shadow:0 8px 26px -8px rgba(63,185,127,0.5);}
