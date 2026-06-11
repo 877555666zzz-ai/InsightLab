@@ -303,3 +303,17 @@ body::before{
           mask-composite: exclude;
   pointer-events: none;
 }
+
+/* --- ПРОИЗВОДИТЕЛЬНОСТЬ DRAG: на момент перетаскивания убираем тяжёлый blur и анимации,
+   чтобы карточка летела за курсором мгновенно (backdrop-filter пересчитывается каждый кадр) --- */
+body.dragging .kanban-card,
+body.dragging .glass-card,
+body.dragging .n-glass {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+body.dragging .kanban-card {
+  transition: none !important;
+  background: var(--c-surface) !important;
+}
+body.dragging * { cursor: grabbing !important; }

@@ -751,7 +751,8 @@ function KanbanCard({ children, onDragStart, onClick, accent }) {
     <div
       className="kanban-card"
       draggable
-      onDragStart={onDragStart}
+      onDragStart={(e) => { document.body.classList.add("dragging"); onDragStart && onDragStart(e); }}
+      onDragEnd={() => document.body.classList.remove("dragging")}
       onClick={onClick}
       style={{
         background: "var(--g-card)",
@@ -2225,7 +2226,7 @@ function CRMApp({ onSignOut }) {
         Выйти
       </button>
       <Header user={user} users={isAdmin ? db.users : [user]} onSwitchUser={switchUser} nav={nav} current={validPage} onNav={(p) => { setPage(p); setActiveProject(null); }} query={salesQuery} setQuery={setSalesQuery} notifications={notifications} onSignOut={onSignOut} />
-      <main style={{ maxWidth: "100%", margin: 0, padding: "26px 24px 80px" }}>{content}</main>
+      <main style={{ maxWidth: validPage === "sales" ? "100%" : 1280, margin: "0 auto", padding: "26px 24px 80px" }}>{content}</main>
 
       {/* Модалки */}
       {openLead && (
