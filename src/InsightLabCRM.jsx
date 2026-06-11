@@ -2127,7 +2127,7 @@ function CRMApp({ onSignOut }) {
     );
     content = (
       <>
-        <div style={{ maxWidth: 1280 }}>
+        <div style={{ maxWidth: 1280, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 22, flexWrap: "wrap", gap: 14 }}>
           <div>
             <h2 style={{ margin: 0, fontSize: 32, fontWeight: 700, letterSpacing: -0.9, color: C.text }}>Продажи</h2>
