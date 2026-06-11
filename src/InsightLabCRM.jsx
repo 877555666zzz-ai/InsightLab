@@ -624,9 +624,10 @@ function Logo() {
 }
 
 // ---------- Header с переключателем роли (демонстрация 3 интерфейсов) ----------
-function Header({ user, users, onSwitchUser, nav, current, onNav, query, setQuery }) {
+function Header({ user, users, onSwitchUser, nav, current, onNav, query, setQuery, notifications = [], onSignOut }) {
   const initials = (user.name || "?").split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
   const [userMenu, setUserMenu] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
   return (
     <header style={{
       background: C.glass, backdropFilter: "blur(18px) saturate(140%)", WebkitBackdropFilter: "blur(18px) saturate(140%)",
@@ -660,13 +661,44 @@ function Header({ user, users, onSwitchUser, nav, current, onNav, query, setQuer
       )}
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         <ThemeToggle />
-        <button title="Уведомления" style={{
-          width: 40, height: 40, borderRadius: "50%", border: "1px solid " + C.borderStrong, background: C.surface,
-          color: C.muted, cursor: "pointer", display: "inline-grid", placeItems: "center", position: "relative", flexShrink: 0,
-        }}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.7 21a2 2 0 0 1-3.4 0" /></svg>
-          <span style={{ position: "absolute", top: 9, right: 10, width: 7, height: 7, borderRadius: 7, background: C.amber, boxShadow: "0 0 0 2px " + C.glass }} />
-        </button>
+        <div style={{ position: "relative", flexShrink: 0 }}>
+          <button title="Уведомления" onClick={() => { setNotifOpen((v) => !v); setUserMenu(false); }} style={{
+            width: 40, height: 40, borderRadius: "50%", border: "1px solid " + C.borderStrong, background: C.surface,
+            color: C.muted, cursor: "pointer", display: "inline-grid", placeItems: "center", position: "relative",
+          }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.7 21a2 2 0 0 1-3.4 0" /></svg>
+            {notifications.length > 0 && (
+              <span style={{ position: "absolute", top: -3, right: -3, minWidth: 18, height: 18, padding: "0 5px", borderRadius: 999, background: C.red, color: "#fff", fontSize: 10.5, fontWeight: 800, display: "grid", placeItems: "center", boxShadow: "0 0 0 2px " + C.glass }}>{notifications.length}</span>
+            )}
+          </button>
+          {notifOpen && (
+            <>
+              <div onClick={() => setNotifOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 60 }} />
+              <div style={{ position: "absolute", top: 48, right: 0, zIndex: 61, width: 320, maxHeight: 420, overflowY: "auto",
+                background: C.surface, border: "1px solid " + C.border, borderRadius: 14, boxShadow: C.shadowLg }}>
+                <div style={{ padding: "13px 15px 9px", fontSize: 13.5, fontWeight: 700, color: C.text, borderBottom: "1px solid " + C.border, position: "sticky", top: 0, background: C.surface }}>
+                  Уведомления{notifications.length > 0 ? " · " + notifications.length : ""}
+                </div>
+                {notifications.length === 0 ? (
+                  <div style={{ padding: "28px 16px", textAlign: "center", color: C.faint, fontSize: 13 }}>Новых уведомлений нет</div>
+                ) : notifications.map((n) => {
+                  const col = n.kind === "lead" ? C.green : n.kind === "demo" ? C.indigo : n.kind === "interview" ? C.blue : n.kind === "call" ? C.green : C.amber;
+                  return (
+                    <button key={n.id} onClick={() => { onNav(n.page); setNotifOpen(false); }}
+                      style={{ display: "flex", alignItems: "flex-start", gap: 11, width: "100%", textAlign: "left",
+                        padding: "11px 15px", border: "none", borderBottom: "1px solid " + C.border, cursor: "pointer", background: "transparent", fontFamily: FONT }}>
+                      <span style={{ width: 9, height: 9, borderRadius: 9, background: col, marginTop: 4, flexShrink: 0 }} />
+                      <span style={{ minWidth: 0 }}>
+                        <span style={{ display: "block", fontSize: 12.5, fontWeight: 700, color: C.muted }}>{n.title}</span>
+                        <span style={{ display: "block", fontSize: 13.5, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{n.sub}</span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </div>
         {/* аватар → меню смены пользователя */}
         <div style={{ position: "relative", flexShrink: 0 }}>
           <button onClick={() => setUserMenu((v) => !v)} title={user.name + " · " + ROLES[user.role]}
@@ -694,6 +726,15 @@ function Header({ user, users, onSwitchUser, nav, current, onNav, query, setQuer
                     </span>
                   </button>
                 ))}
+                {onSignOut && (
+                  <button onClick={() => { setUserMenu(false); onSignOut(); }}
+                    style={{ display: "flex", alignItems: "center", gap: 9, width: "100%", textAlign: "left",
+                      padding: "11px 14px", border: "none", borderTop: "1px solid " + C.border, cursor: "pointer", fontFamily: FONT,
+                      background: "transparent", color: C.red, fontWeight: 600, fontSize: 13.5 }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></svg>
+                    Выйти из аккаунта
+                  </button>
+                )}
               </div>
             </>
           )}
@@ -1923,6 +1964,19 @@ function CRMApp({ onSignOut }) {
 
   // ---------- данные с учётом прав (3.2) ----------
   const visibleLeads = isAdmin ? db.leads : db.leads.filter((l) => l.owner === userId);
+  // --- уведомления для колокольчика (живые события) ---
+  const notifications = (() => {
+    const today = todayISO();
+    const mine = (o) => isAdmin || o === userId;
+    const out = [];
+    (db.leads || []).filter((l) => l.stage === "new" && mine(l.owner)).forEach((l) =>
+      out.push({ id: "ln_" + l.id, kind: "lead", page: "sales", title: "Новый лид", sub: l.company || "Без названия" }));
+    (db.leads || []).filter((l) => l.stage === "demo_set" && mine(l.owner)).forEach((l) =>
+      out.push({ id: "ld_" + l.id, kind: "demo", page: "sales", title: "Разбор-пари назначен", sub: l.company || "Без названия" }));
+    (db.tasks || []).filter((t) => !t.done && (t.when || "").slice(0, 10) === today && mine(t.owner)).forEach((t) =>
+      out.push({ id: "lt_" + t.id, kind: t.type, page: "calendar", title: "Сегодня", sub: t.title }));
+    return out;
+  })();
   // визуальные фильтры воронки (поиск + Активные/Все) — не трогают данные
   const _lq = salesQuery.trim().toLowerCase();
   const displayLeads = visibleLeads.filter((l) => {
@@ -2170,7 +2224,7 @@ function CRMApp({ onSignOut }) {
           fontFamily: FONT, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
         Выйти
       </button>
-      <Header user={user} users={isAdmin ? db.users : [user]} onSwitchUser={switchUser} nav={nav} current={validPage} onNav={(p) => { setPage(p); setActiveProject(null); }} query={salesQuery} setQuery={setSalesQuery} />
+      <Header user={user} users={isAdmin ? db.users : [user]} onSwitchUser={switchUser} nav={nav} current={validPage} onNav={(p) => { setPage(p); setActiveProject(null); }} query={salesQuery} setQuery={setSalesQuery} notifications={notifications} onSignOut={onSignOut} />
       <main style={{ maxWidth: "100%", margin: 0, padding: "26px 24px 80px" }}>{content}</main>
 
       {/* Модалки */}
