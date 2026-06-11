@@ -315,5 +315,6 @@ body.dragging .n-glass {
 body.dragging .kanban-card {
   transition: none !important;
   background: var(--c-surface) !important;
+  box-shadow: none !important;
 }
 body.dragging * { cursor: grabbing !important; }

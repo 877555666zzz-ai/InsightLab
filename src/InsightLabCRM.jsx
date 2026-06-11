@@ -787,13 +787,13 @@ function KanbanScroller({ children }) {
   }, []);
   const loop = () => {
     const el = ref.current;
-    if (el && dir.current) { el.scrollLeft += dir.current * 16; refresh(); raf.current = requestAnimationFrame(loop); }
+    if (el && dir.current) { el.scrollLeft += dir.current * 30; refresh(); raf.current = requestAnimationFrame(loop); }
     else { raf.current = null; }
   };
   const onDragOver = (e) => {
     const el = ref.current; if (!el) return;
     const r = el.getBoundingClientRect();
-    const x = e.clientX - r.left, edge = 90;
+    const x = e.clientX - r.left, edge = 110;
     dir.current = x < edge ? -1 : x > r.width - edge ? 1 : 0;
     if (dir.current && !raf.current) raf.current = requestAnimationFrame(loop);
   };
@@ -1182,6 +1182,7 @@ function ProjectView({ project, users, respondents, canEditScript, canConduct,
 
   return (
     <div>
+      <div style={{ maxWidth: 1280, margin: "0 auto" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
         {onBack && <Btn variant="ghost" size="sm" onClick={onBack}>← К общему виду</Btn>}
         <div>
@@ -1216,12 +1217,7 @@ function ProjectView({ project, users, respondents, canEditScript, canConduct,
         ))}
       </div>
 
-      {tab === "overview" && (
-        projResp.length
-          ? <KanbanBoard stages={RECRUIT_STAGES} items={projResp} getStage={(r) => r.stage}
-              renderCard={(r, ds) => RespCard(r, ds, () => onOpenResp(r))} onMove={onMoveResp} onDelete={onDeleteResp} />
-          : <EmptyState icon="👥" title="Респондентов пока нет" text="Импортируйте список во вкладке «Импорт/Экспорт»." />
-      )}
+      {tab === "overview" && !projResp.length && <EmptyState icon={<UsersIcon size={24} strokeWidth={1.7} />} title="Респондентов пока нет" text="Импортируйте список во вкладке «Импорт/Экспорт»." />}
       {tab === "script" && <ScriptTab project={project} canEdit={canEditScript} onSaveScript={onSaveScript} />}
       {tab === "schedule" && (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -1235,8 +1231,13 @@ function ProjectView({ project, users, respondents, canEditScript, canConduct,
                 <Btn size="sm" onClick={() => onOpenResp(r)}>Открыть</Btn>}
             </Panel>
           ))}
-          {!projResp.some((r) => r.slot) && <EmptyState icon="🗓" title="Слотов пока нет" />}
+          {!projResp.some((r) => r.slot) && <EmptyState icon={<CalendarDays size={24} strokeWidth={1.7} />} title="Слотов пока нет" />}
         </div>
+      )}
+      </div>
+      {tab === "overview" && projResp.length > 0 && (
+        <KanbanBoard stages={RECRUIT_STAGES} items={projResp} getStage={(r) => r.stage}
+          renderCard={(r, ds) => RespCard(r, ds, () => onOpenResp(r))} onMove={onMoveResp} onDelete={onDeleteResp} />
       )}
     </div>
   );
@@ -1571,8 +1572,9 @@ const RESP_FIELDS = [
   { key: "reward", label: "Вознаграждение" }, { key: "notes", label: "Заметки" },
 ];
 
-function ImportExportModal({ kind, existing, projectId, onClose, onImport }) {
+function ImportExportModal({ kind, existing, projectId, projects = [], onClose, onImport }) {
   const fields = kind === "lead" ? LEAD_FIELDS : RESP_FIELDS;
+  const [proj, setProj] = useState(projectId || projects[0]?.id || "");
   const [rows, setRows] = useState(null);
   const [cols, setCols] = useState([]);
   const [map, setMap] = useState({});
@@ -1612,7 +1614,7 @@ function ImportExportModal({ kind, existing, projectId, onClose, onImport }) {
       items.push(obj);
       added++;
     });
-    onImport(items);
+    onImport(items, proj);
     setResult({ added, dup, total: rows.length });
   };
 
@@ -1633,6 +1635,15 @@ function ImportExportModal({ kind, existing, projectId, onClose, onImport }) {
 
       {rows && !result && (
         <>
+          {kind === "resp" && (
+            <div style={{ marginBottom: 16, padding: 12, background: C.panel, borderRadius: 10, border: "1px solid " + C.border }}>
+              <div style={{ display: "grid", gridTemplateColumns: "160px 1fr", gap: 12, alignItems: "center" }}>
+                <span style={{ fontSize: 13, fontWeight: 700 }}>В какой проект</span>
+                <Select value={proj} options={projects.length ? projects.map((p) => ({ value: p.id, label: p.client })) : [{ value: "", label: "Нет проектов" }]} onChange={(e) => setProj(e.target.value)} />
+              </div>
+              <div style={{ fontSize: 11.5, color: C.faint, marginTop: 8 }}>Респонденты добавятся в выбранный проект.</div>
+            </div>
+          )}
           <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>Маппинг полей · найдено строк: {rows.length}</div>
           <div style={{ display: "grid", gap: 10 }}>
             {fields.map((f) => (
@@ -1645,7 +1656,7 @@ function ImportExportModal({ kind, existing, projectId, onClose, onImport }) {
           </div>
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 18 }}>
             <Btn variant="ghost" onClick={() => setRows(null)}>← Другой файл</Btn>
-            <Btn onClick={runImport}>Импортировать {rows.length} строк</Btn>
+            <Btn onClick={runImport} disabled={kind === "resp" && !proj}>Импортировать {rows.length} строк</Btn>
           </div>
         </>
       )}
@@ -2037,7 +2048,7 @@ function CRMApp({ onSignOut }) {
   };
 
   // ---------- импорт ----------
-  const doImport = (items) => {
+  const doImport = (items, projId) => {
     if (importKind.kind === "lead") {
       patch({ leads: [...db.leads, ...items.map((it) => ({
         id: uid("lead"), company: it.company || "—", contact: it.contact || "", title: it.title || "",
@@ -2045,7 +2056,7 @@ function CRMApp({ onSignOut }) {
         stage: "new", owner: userId, nextTouch: todayISO(), amount: 0, notes: it.notes || "", history: [],
       }))] });
     } else {
-      const pid = importKind.projectId;
+      const pid = projId || importKind.projectId;
       patch({ respondents: [...db.respondents, ...items.map((it) => ({
         id: uid("resp"), name: it.name || "—", phone: it.phone || "", project: pid,
         screenStatus: it.screenStatus || "—", qualified: false, slot: null,
@@ -2167,12 +2178,12 @@ function CRMApp({ onSignOut }) {
         onSaveScript={(s) => saveScript(p.id, s)} onBack={() => setActiveProject(null)} />;
     } else {
       content = (
-        <>
+        <div style={{ maxWidth: 1280, margin: "0 auto" }}>
           <PageHead title="Рекрутинг" sub="Все проекты доставки">
             <Btn variant="ghost" size="sm" onClick={() => setImportKind({ kind: "resp", projectId: db.projects[0]?.id })}>↑ Импорт респондентов</Btn>
           </PageHead>
           <ProjectsGrid projects={visibleProjects} users={db.users} respondents={db.respondents} onOpen={setActiveProject} />
-        </>
+        </div>
       );
     }
   }
@@ -2228,7 +2239,7 @@ function CRMApp({ onSignOut }) {
         Выйти
       </button>
       <Header user={user} users={isAdmin ? db.users : [user]} onSwitchUser={switchUser} nav={nav} current={validPage} onNav={(p) => { setPage(p); setActiveProject(null); }} query={salesQuery} setQuery={setSalesQuery} notifications={notifications} onSignOut={onSignOut} />
-      <main style={{ maxWidth: validPage === "sales" ? "100%" : 1280, margin: "0 auto", padding: "26px 24px 80px" }}>{content}</main>
+      <main style={{ maxWidth: ["sales", "recruit"].includes(validPage) ? "100%" : 1280, margin: "0 auto", padding: "26px 24px 80px" }}>{content}</main>
 
       {/* Модалки */}
       {openLead && (
@@ -2248,7 +2259,7 @@ function CRMApp({ onSignOut }) {
           onStartInterview={(r) => { setOpenResp(null); setInterviewMode({ respId: r.id }); }} />
       )}
       {importKind && (
-        <ImportExportModal kind={importKind.kind} projectId={importKind.projectId}
+        <ImportExportModal kind={importKind.kind} projectId={importKind.projectId} projects={db.projects}
           existing={importKind.kind === "lead" ? db.leads : db.respondents}
           onClose={() => setImportKind(null)} onImport={doImport} />
       )}
