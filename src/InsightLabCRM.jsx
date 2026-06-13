@@ -15,6 +15,8 @@ import BrandMark from "./components/Logo";
 import {
   BarChart3, Mic, Calendar as CalIcon, TrendingUp, Users as UsersIcon, Settings as SettingsIcon, LayoutDashboard,
   CalendarDays, Bell as BellIcon, Trash2,
+  Coffee, FolderOpen, CheckCircle2, FileText, Lightbulb, Clock, Flame,
+  Copy, Send, Mail, MessageCircle, Linkedin, Check,
 } from "lucide-react";
 import "./nocturne.css";
 
@@ -920,6 +922,106 @@ function KanbanBoard({ stages, items, getStage, renderCard, onMove, sideStages, 
   );
 }
 
+// ---------- Сообщение клиенту + кнопки отправки (3.3) ----------
+function MessageComposer({ lead, value, disabled, onChange }) {
+  const [copied, setCopied] = useState(false);
+  const MAX = 300;
+  const msg = value || "";
+  const text = msg.trim();
+
+  // нормализация телефона для wa.me (только цифры)
+  const phoneDigits = (lead.phone || "").replace(/[^\d]/g, "");
+  const tg = (lead.telegram || "").replace(/^@/, "").trim();
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(msg);
+    } catch (_) {
+      // запасной способ, если clipboard API недоступен
+      const ta = document.createElement("textarea");
+      ta.value = msg; ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta); ta.select();
+      try { document.execCommand("copy"); } catch (e) {}
+      document.body.removeChild(ta);
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1800);
+  };
+
+  const openWith = async (url) => {
+    // копируем текст в буфер, затем открываем канал (для TG/LinkedIn вставишь вручную)
+    if (text) { try { await navigator.clipboard.writeText(msg); } catch (_) {} }
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
+
+  const enc = encodeURIComponent(msg);
+
+  // ссылки на каналы
+  const waUrl = phoneDigits ? `https://wa.me/${phoneDigits}${text ? `?text=${enc}` : ""}` : null;
+  // Telegram: по username (@…) или по номеру телефона
+  const tgUrl = tg ? `https://t.me/${tg}` : (phoneDigits ? `https://t.me/+${phoneDigits}` : null);
+  const mailUrl = lead.email ? `mailto:${lead.email}${text ? `?body=${enc}` : ""}` : null;
+  const liUrl = (lead.source === "LinkedIn" || /linkedin\.com/i.test(lead.email || lead.company || ""))
+    ? "https://www.linkedin.com/" : "https://www.linkedin.com/";
+
+  const btn = (active) => ({
+    display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 12px",
+    borderRadius: 9, fontSize: 12.5, fontWeight: 600, fontFamily: FONT,
+    border: "1px solid " + (active ? C.border : C.border),
+    background: active ? C.surface : C.panel,
+    color: active ? C.text : C.faint,
+    cursor: active ? "pointer" : "not-allowed",
+    opacity: active ? 1 : 0.5,
+  });
+
+  return (
+    <div style={{ marginTop: 4 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+        <span style={{ fontSize: 12.5, fontWeight: 700, color: C.text }}>Сообщение</span>
+        <span style={{ fontSize: 11.5, color: msg.length > MAX ? C.red : C.faint }}>{msg.length} / {MAX}</span>
+      </div>
+      <Textarea
+        rows={4}
+        value={msg}
+        maxLength={MAX}
+        disabled={disabled}
+        placeholder="Персональное сообщение клиенту…"
+        onChange={(e) => onChange(e.target.value.slice(0, MAX))}
+      />
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
+        <button type="button" onClick={copy} disabled={!text}
+          style={{ ...btn(!!text), background: copied ? C.blueLight : (text ? C.surface : C.panel), color: copied ? C.blueDark : (text ? C.text : C.faint), borderColor: copied ? C.blue : C.border }}>
+          {copied ? <Check size={14} strokeWidth={2} /> : <Copy size={14} strokeWidth={1.8} />}
+          {copied ? "Скопировано" : "Скопировать"}
+        </button>
+
+        <button type="button" onClick={() => waUrl && openWith(waUrl)} disabled={!waUrl}
+          title={waUrl ? "Открыть WhatsApp (текст подставится)" : "Нет телефона"} style={btn(!!waUrl)}>
+          <MessageCircle size={14} strokeWidth={1.8} /> WhatsApp
+        </button>
+
+        <button type="button" onClick={() => tgUrl && openWith(tgUrl)} disabled={!tgUrl}
+          title={tgUrl ? "Открыть Telegram (текст в буфере — вставьте)" : "Нет Telegram username"} style={btn(!!tgUrl)}>
+          <Send size={14} strokeWidth={1.8} /> Telegram
+        </button>
+
+        <button type="button" onClick={() => openWith(liUrl)}
+          title="Открыть LinkedIn (текст в буфере — вставьте)" style={btn(true)}>
+          <Linkedin size={14} strokeWidth={1.8} /> LinkedIn
+        </button>
+
+        <button type="button" onClick={() => mailUrl && openWith(mailUrl)} disabled={!mailUrl}
+          title={mailUrl ? "Открыть письмо (текст подставится)" : "Нет email"} style={btn(!!mailUrl)}>
+          <Mail size={14} strokeWidth={1.8} /> Почта
+        </button>
+      </div>
+      <div style={{ fontSize: 11, color: C.faint, marginTop: 7, lineHeight: 1.4 }}>
+        WhatsApp и Почта подставят текст сами. Для Telegram и LinkedIn текст копируется — вставьте в чат (Cmd+V).
+      </div>
+    </div>
+  );
+}
+
 // ---------- Карточка лида (полная, с историей) ----------
 function LeadDetail({ lead, users, canEdit, onSave, onClose, onConvert }) {
   const [l, setL] = useState({ ...lead });
@@ -954,7 +1056,7 @@ function LeadDetail({ lead, users, canEdit, onSave, onClose, onConvert }) {
         <Field label="Дата следующего касания"><Input type="date" value={l.nextTouch || ""} disabled={!canEdit} onChange={(e) => set("nextTouch", e.target.value)} /></Field>
         <Field label="Оценочная сумма сделки, ₸"><Input type="number" value={l.amount} disabled={!canEdit} onChange={(e) => set("amount", +e.target.value)} /></Field>
       </div>
-      <Field label="Заметки"><Textarea rows={2} value={l.notes} disabled={!canEdit} onChange={(e) => set("notes", e.target.value)} /></Field>
+      <MessageComposer lead={l} value={l.notes} disabled={!canEdit} onChange={(v) => set("notes", v)} />
 
       <div style={{ marginTop: 8 }}>
         <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 10 }}>История активностей</div>
@@ -996,7 +1098,7 @@ function ConvertModal({ lead, users, onClose, onCreate }) {
   return (
     <Modal open onClose={onClose} width={560} title={"Конвертация в проект: " + lead.company}
       footer={<><Btn variant="ghost" onClick={onClose}>Отмена</Btn>
-        <Btn onClick={() => onCreate({ ...p, price: PACKAGE_PRICE[p.pkg] })}>Создать проект</Btn></>}>
+        <Btn disabled={!p.interviewers.length} onClick={() => p.interviewers.length && onCreate({ ...p, price: PACKAGE_PRICE[p.pkg] })}>Создать проект</Btn></>}>
       <Field label="Клиент"><Input value={p.client} onChange={(e) => set("client", e.target.value)} /></Field>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
         <Field label="Тип пакета"><Select value={p.pkg} options={PACKAGES} onChange={(e) => set("pkg", e.target.value)} /></Field>
@@ -1005,7 +1107,7 @@ function ConvertModal({ lead, users, onClose, onCreate }) {
         <Field label="План интервью"><Input type="number" value={p.planInterviews} onChange={(e) => set("planInterviews", +e.target.value)} /></Field>
         <Field label="Дедлайн"><Input type="date" value={p.deadline} onChange={(e) => set("deadline", e.target.value)} /></Field>
       </div>
-      <Field label="Назначить интервьюеров">
+      <Field label="Ответственный интервьюер" hint="(обязательно — он увидит этот проект у себя)">
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
           {users.filter((u) => u.role === "interviewer").map((u) => (
             <button key={u.id} onClick={() => toggleInt(u.id)} style={{
@@ -1015,6 +1117,9 @@ function ConvertModal({ lead, users, onClose, onCreate }) {
               padding: "7px 13px", borderRadius: 20, cursor: "pointer", fontWeight: 600, fontSize: 13, fontFamily: FONT,
             }}>{u.name}</button>
           ))}
+          {!users.some((u) => u.role === "interviewer") && (
+            <div style={{ fontSize: 12.5, color: C.faint }}>Нет интервьюеров. Назначьте роль «Интервьюер» в разделе «Пользователи».</div>
+          )}
         </div>
       </Field>
     </Modal>
@@ -1111,7 +1216,7 @@ function ScriptTab({ project, canEdit, onSaveScript }) {
       )}
 
       {preview.length === 0 ? (
-        <EmptyState icon="📝" title="Скрипт ещё не загружен" text="Вставьте текст вопросов — система разобьёт его на слайды." />
+        <EmptyState icon={<FileText size={24} strokeWidth={1.6} />} title="Скрипт ещё не загружен" text="Вставьте текст вопросов — система разобьёт его на слайды." />
       ) : (
         <>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
@@ -1139,7 +1244,7 @@ function ScriptTab({ project, canEdit, onSaveScript }) {
                 {canEdit
                   ? <Select value={b.type} options={Object.entries(BLOCK_TYPE_LABEL).map(([v, l]) => ({ value: v, label: l }))} onChange={(e) => retype(i, e.target.value)} style={{ marginBottom: 10, fontSize: 12 }} />
                   : <Badge style={{ marginBottom: 10 }}>{BLOCK_TYPE_LABEL[b.type]}</Badge>}
-                {b.hint && <div style={{ fontSize: 12, color: C.amber, background: C.hintBg, padding: "6px 9px", borderRadius: 7, marginBottom: 8 }}>💡 {b.hint}</div>}
+                {b.hint && <div style={{ fontSize: 12, color: C.amber, background: C.hintBg, padding: "6px 9px", borderRadius: 7, marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}><Lightbulb size={13} strokeWidth={1.8} style={{ flexShrink: 0 }} /> {b.hint}</div>}
                 <ol style={{ margin: 0, paddingLeft: 18, color: C.text }}>
                   {b.questions.map((q, qi) => <li key={qi} style={{ fontSize: 13, marginBottom: 4, lineHeight: 1.45 }}>{q}</li>)}
                 </ol>
@@ -1168,7 +1273,7 @@ function RespCard(resp, onDragStart, onClick) {
         {resp.insight && <Badge color={C.green} bg="#E7F6EE">★ инсайт</Badge>}
       </div>
       <div style={{ fontSize: 12, color: C.faint, marginTop: 2 }}>{resp.phone}</div>
-      {resp.slot && <div style={{ fontSize: 11.5, color: C.blueDark, marginTop: 6 }}>🗓 {fmtDateTime(resp.slot)}</div>}
+      {resp.slot && <div style={{ fontSize: 11.5, color: C.blueDark, marginTop: 6, display: "flex", alignItems: "center", gap: 5 }}><Clock size={12} strokeWidth={1.8} style={{ flexShrink: 0 }} /> {fmtDateTime(resp.slot)}</div>}
     </KanbanCard>
   );
 }
@@ -1267,7 +1372,7 @@ function InterviewerHome({ user, projects, respondents, tasks, onOpenProject, on
               <span style={{ fontWeight: 600, fontSize: 13.5 }}>{r.name}</span>
               <span style={{ fontSize: 12.5, color: C.blueDark }}>{fmtDateTime(r.slot).split(",")[1] || fmtDateTime(r.slot)}</span>
             </div>
-          )) : <EmptyState icon="☕" title="На сегодня интервью нет" />}
+          )) : <EmptyState icon={<Coffee size={24} strokeWidth={1.6} />} title="На сегодня интервью нет" />}
         </Panel>
         <Panel>
           <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>Ближайшие слоты</div>
@@ -1276,7 +1381,7 @@ function InterviewerHome({ user, projects, respondents, tasks, onOpenProject, on
               <span style={{ fontSize: 13.5 }}>{r.name}</span>
               <span style={{ fontSize: 12.5, color: C.faint }}>{fmtDateTime(r.slot)}</span>
             </div>
-          )) : <EmptyState icon="🗓" title="Слотов пока нет" />}
+          )) : <EmptyState icon={<CalendarDays size={24} strokeWidth={1.6} />} title="Слотов пока нет" />}
         </Panel>
       </div>
 
@@ -1298,7 +1403,7 @@ function InterviewerHome({ user, projects, respondents, tasks, onOpenProject, on
               </div>
             );
           })}
-          {!myProjects.length && <EmptyState icon="📁" title="Проектов пока не назначено" />}
+          {!myProjects.length && <EmptyState icon={<FolderOpen size={24} strokeWidth={1.6} />} title="Проектов пока не назначено" />}
         </div>
       </Panel>
 
@@ -1309,7 +1414,7 @@ function InterviewerHome({ user, projects, respondents, tasks, onOpenProject, on
             <span style={{ fontSize: 13.5 }}>{t.title}</span>
             <span style={{ fontSize: 12, color: C.faint }}>{fmtDate(t.when)}</span>
           </div>
-        )) : <EmptyState icon="✅" title="Задач нет" />}
+        )) : <EmptyState icon={<CheckCircle2 size={24} strokeWidth={1.6} />} title="Задач нет" />}
       </Panel>
     </div>
   );
@@ -1399,7 +1504,7 @@ function InterviewSlider({ respondent, project, initialNotes, onSaveNote, onFini
               <h1 style={{ fontSize: "clamp(26px,3vw,36px)", fontWeight: 800, color: "var(--c-text)", margin: "0 0 24px", lineHeight: 1.12, letterSpacing: -0.5 }}>{block.title}</h1>
               {block.hint && (
                 <div style={{ background: "var(--c-hint-bg)", border: "1px solid var(--c-hint-bd)", color: "var(--c-hint-tx)", padding: "13px 17px", borderRadius: 13, marginBottom: 26, fontSize: 14.5, lineHeight: 1.55, display: "flex", gap: 10 }}>
-                  <span style={{ flexShrink: 0 }}>💡</span><span>{block.hint}</span>
+                  <Lightbulb size={18} strokeWidth={1.8} style={{ flexShrink: 0 }} /><span>{block.hint}</span>
                 </div>
               )}
               <ol style={{ margin: 0, padding: 0, listStyle: "none" }}>
@@ -1665,7 +1770,7 @@ function ImportExportModal({ kind, existing, projectId, projects = [], onClose, 
 
       {result && (
         <div style={{ textAlign: "center", padding: "20px 0" }}>
-          <div style={{ fontSize: 34, marginBottom: 10 }}>✅</div>
+          <div style={{ marginBottom: 10, display: "flex", justifyContent: "center" }}><CheckCircle2 size={40} strokeWidth={1.6} style={{ color: C.green }} /></div>
           <div style={{ fontWeight: 800, fontSize: 18, marginBottom: 14 }}>Импорт завершён</div>
           <div style={{ display: "flex", justifyContent: "center", gap: 24 }}>
             <div><div style={{ fontSize: 24, fontWeight: 800, color: C.green }}>{result.added}</div><div style={{ fontSize: 12, color: C.faint }}>добавлено</div></div>
@@ -2250,22 +2355,22 @@ function CRMApp({ onSignOut }) {
   // ---------- навигация по ролям ----------
   const NAV = {
     admin: [
-      { id: "sales", label: "Продажи", icon: "📊" },
-      { id: "recruit", label: "Рекрутинг", icon: "🎙" },
-      { id: "calendar", label: "Календарь", icon: "🗓" },
-      { id: "analytics", label: "Аналитика", icon: "📈" },
-      { id: "users", label: "Пользователи", icon: "👤" },
-      { id: "settings", label: "Настройки", icon: "⚙️" },
+      { id: "sales", label: "Продажи", },
+      { id: "recruit", label: "Рекрутинг", },
+      { id: "calendar", label: "Календарь", },
+      { id: "analytics", label: "Аналитика", },
+      { id: "users", label: "Пользователи", },
+      { id: "settings", label: "Настройки", },
     ],
     sales: [
-      { id: "sales", label: "Продажи", icon: "📊" },
-      { id: "calendar", label: "Календарь", icon: "🗓" },
-      { id: "analytics", label: "Аналитика", icon: "📈" },
+      { id: "sales", label: "Продажи", },
+      { id: "calendar", label: "Календарь", },
+      { id: "analytics", label: "Аналитика", },
     ],
     interviewer: [
-      { id: "workspace", label: "Рабочее пространство", icon: "🎙" },
-      { id: "calendar", label: "Календарь", icon: "🗓" },
-      { id: "analytics", label: "Аналитика", icon: "📈" },
+      { id: "workspace", label: "Рабочее пространство", },
+      { id: "calendar", label: "Календарь", },
+      { id: "analytics", label: "Аналитика", },
     ],
   };
   const nav = NAV[role];
@@ -2415,7 +2520,7 @@ function CRMApp({ onSignOut }) {
       {(l.contact || l.title) && <div style={{ fontSize: 11.5, color: C.faint, marginTop: 4, lineHeight: 1.35 }}>{[l.contact, l.title].filter(Boolean).join(" · ")}</div>}
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 11 }}>
         <span style={{ fontSize: 10.5, fontWeight: 600, color: C.muted, background: "var(--g-col)", border: "1px solid var(--g-col-border)", padding: "2px 8px", borderRadius: 999 }}>{l.source}</span>
-        {hot && <span style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 11, fontWeight: 700, color: C.amber }}>🔥 Горячий</span>}
+        {hot && <span style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 11, fontWeight: 700, color: C.amber }}><Flame size={12} strokeWidth={2} /> Горячий</span>}
         <span style={{ marginLeft: "auto", fontSize: 13.5, fontWeight: 700, color: C.text, fontVariantNumeric: "tabular-nums" }}>{fmtMoney(l.amount)}</span>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 12, fontSize: 11.5, fontWeight: 600, color: won ? C.green : accent }}>
@@ -2597,7 +2702,7 @@ function PageHead({ title, sub, children }) {
 }
 
 function ProjectsGrid({ projects, users, respondents, onOpen, onDelete }) {
-  if (!projects.length) return <EmptyState icon="📁" title="Проектов нет" text="Выиграйте лид в воронке продаж — создастся проект." />;
+  if (!projects.length) return <EmptyState icon={<FolderOpen size={24} strokeWidth={1.6} />} title="Проектов нет" text="Выиграйте лид в воронке продаж — создастся проект." />;
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(260px,1fr))", gap: 16 }}>
       {projects.map((p) => {
