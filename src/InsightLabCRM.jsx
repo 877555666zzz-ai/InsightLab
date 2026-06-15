@@ -16,7 +16,7 @@ import {
   BarChart3, Mic, Calendar as CalIcon, TrendingUp, Users as UsersIcon, Settings as SettingsIcon, LayoutDashboard,
   CalendarDays, Bell as BellIcon, Trash2,
   Coffee, FolderOpen, CheckCircle2, FileText, Lightbulb, Clock, Flame,
-  Copy, Send, Mail, MessageCircle, Linkedin, Check,
+  Copy, Send, Mail, MessageCircle, Linkedin, Check, Instagram, Globe,
 } from "lucide-react";
 import "./nocturne.css";
 
@@ -1022,11 +1022,63 @@ function MessageComposer({ lead, value, disabled, onChange }) {
   );
 }
 
+// ---------- Строка канала связи (телефон/telegram/linkedin/…) ----------
+function ChannelRow({ icon, label, value, actions }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", background: C.panel, borderRadius: 12, marginBottom: 8 }}>
+      <div style={{ width: 40, height: 40, borderRadius: 10, background: C.surface, display: "grid", placeItems: "center", flexShrink: 0, border: "1px solid " + C.border }}>
+        {icon}
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 10.5, fontWeight: 700, color: C.faint, letterSpacing: 0.4, textTransform: "uppercase" }}>{label}</div>
+        <div style={{ fontSize: 13.5, color: C.text, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{value}</div>
+      </div>
+      <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>{actions}</div>
+    </div>
+  );
+}
+
+// маленькая кнопка-действие канала
+function ChActionBtn({ onClick, color, children }) {
+  return (
+    <button type="button" onClick={onClick} style={{
+      display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 13px", borderRadius: 9,
+      border: "1px solid " + (color || C.border), background: color || C.surface,
+      color: color ? "#fff" : C.text, cursor: "pointer", fontWeight: 600, fontSize: 12.5, fontFamily: FONT, whiteSpace: "nowrap",
+    }}>{children}</button>
+  );
+}
+
+// поле только для чтения с кнопкой «копировать» (для БИН и т.п.)
+function CopyField({ label, value }) {
+  const [done, setDone] = useState(false);
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(value || ""); } catch (_) {}
+    setDone(true); setTimeout(() => setDone(false), 1500);
+  };
+  return (
+    <Field label={label}>
+      <div style={{ position: "relative" }}>
+        <Input value={value || ""} disabled style={{ paddingRight: 40 }} />
+        {value && (
+          <button type="button" onClick={copy} title="Копировать" style={{
+            position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)",
+            border: "none", background: "transparent", cursor: "pointer", color: done ? C.green : C.faint, padding: 4,
+          }}>{done ? <Check size={15} strokeWidth={2} /> : <Copy size={15} strokeWidth={1.8} />}</button>
+        )}
+      </div>
+    </Field>
+  );
+}
+
 // ---------- Карточка лида (полная, с историей) ----------
-function LeadDetail({ lead, users, canEdit, onSave, onClose, onConvert }) {
+function LeadDetail({ lead, users, allLeads = [], canEdit, onSave, onClose, onConvert, onPick }) {
   const [l, setL] = useState({ ...lead });
   const [act, setAct] = useState({ type: "call", title: "" });
+  const [q, setQ] = useState("");
   const set = (k, v) => setL((p) => ({ ...p, [k]: v }));
+  // синхронизируем форму при переключении лида в списке слева
+  useEffect(() => { setL({ ...lead }); }, [lead.id]);
   const addActivity = () => {
     if (!act.title.trim()) return;
     const a = { id: uid("act"), type: act.type, title: act.title, when: nowISO(), done: true, owner: l.owner };
@@ -1034,8 +1086,35 @@ function LeadDetail({ lead, users, canEdit, onSave, onClose, onConvert }) {
     setAct({ type: "call", title: "" });
   };
   const stageTitle = SALES_STAGES.find((s) => s.id === l.stage)?.title;
+
+  // --- каналы связи (показываем только заполненные) ---
+  const waDigits = (l.whatsapp || l.phone || "").replace(/[^\d]/g, "");
+  const phoneDigits = (l.phone || "").replace(/[^\d]/g, "");
+  const tgRaw = (l.telegram || "").trim();
+  const tgUrl = tgRaw
+    ? (tgRaw.startsWith("http") ? tgRaw : (tgRaw.startsWith("@") ? "https://t.me/" + tgRaw.slice(1) : "https://t.me/" + tgRaw))
+    : null;
+  const igRaw = (l.instagram || "").trim();
+  const igUrl = igRaw
+    ? (igRaw.startsWith("http") ? igRaw : "https://instagram.com/" + igRaw.replace(/^@/, ""))
+    : null;
+  const normUrl = (u) => { u = (u || "").trim(); if (!u) return null; return u.startsWith("http") ? u : "https://" + u; };
+  const liUrl = normUrl(l.linkedin);
+  const liCompUrl = normUrl(l.linkedinCompany);
+  const siteUrl = normUrl(l.website);
+  const open = (u) => u && window.open(u, "_blank", "noopener,noreferrer");
+
+  const hasAnyChannel = phoneDigits || l.whatsapp || tgUrl || igUrl || liUrl || liCompUrl || siteUrl || l.email;
+
+  // лиды той же стадии, что и открытый (для списка слева)
+  const sameStage = allLeads.filter((x) => x.stage === lead.stage);
+  const ql = q.trim().toLowerCase();
+  const listLeads = ql
+    ? sameStage.filter((x) => (x.company || "").toLowerCase().includes(ql) || (x.contact || "").toLowerCase().includes(ql) || (x.city || "").toLowerCase().includes(ql))
+    : sameStage;
+
   return (
-    <Modal open onClose={onClose} width={620} title={l.company || "Новый лид"}
+    <Modal open onClose={onClose} width={listLeads.length > 1 ? 960 : 620} title={l.company || "Новый лид"}
       footer={canEdit && (
         <>
           {l.stage !== "won" && <Btn variant="ghost" onClick={() => { onSave(l); onClose(); }}>Сохранить</Btn>}
@@ -1044,18 +1123,104 @@ function LeadDetail({ lead, users, canEdit, onSave, onClose, onConvert }) {
             : <Btn onClick={() => { onSave({ ...l, stage: "won" }); onConvert({ ...l, stage: "won" }); }}>Выиграно → создать проект</Btn>}
         </>
       )}>
+      <div style={{ display: listLeads.length > 1 ? "grid" : "block", gridTemplateColumns: listLeads.length > 1 ? "240px 1fr" : "1fr", gap: 20 }}>
+        {/* ---- список лидов слева (та же стадия) ---- */}
+        {listLeads.length > 1 && (
+          <div style={{ borderRight: "1px solid " + C.border, paddingRight: 16, maxHeight: "62vh", overflowY: "auto" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+              <span style={{ fontSize: 13, fontWeight: 800, color: C.text }}>{stageTitle}</span>
+              <Badge color={C.blueDark} bg={C.blueLight}>{sameStage.length}</Badge>
+            </div>
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Поиск…"
+              style={{ ...inputStyle, marginBottom: 10, fontSize: 13, padding: "8px 12px" }} />
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              {listLeads.map((x) => {
+                const active = x.id === l.id;
+                return (
+                  <button key={x.id} type="button" onClick={() => { if (canEdit) onSave(l); onPick && onPick(x); }}
+                    style={{
+                      textAlign: "left", border: "none", borderRadius: 10, padding: "9px 11px", cursor: "pointer",
+                      background: active ? C.blueLight : "transparent", fontFamily: FONT,
+                    }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: active ? C.blueDark : C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{x.company || "Без названия"}</div>
+                    <div style={{ fontSize: 11.5, color: C.faint, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {[x.city, x.employees].filter(Boolean).join(" · ") || x.contact || "—"}
+                    </div>
+                  </button>
+                );
+              })}
+              {!listLeads.length && <div style={{ fontSize: 12.5, color: C.faint, padding: "8px 0" }}>Ничего не найдено</div>}
+            </div>
+          </div>
+        )}
+
+        {/* ---- сама карточка ---- */}
+        <div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-        <Field label="Компания"><Input value={l.company} disabled={!canEdit} onChange={(e) => set("company", e.target.value)} /></Field>
-        <Field label="Контактное лицо"><Input value={l.contact} disabled={!canEdit} onChange={(e) => set("contact", e.target.value)} /></Field>
+        <div style={{ gridColumn: "1 / -1" }}>
+          <Field label="Компания"><Input value={l.company} disabled={!canEdit} onChange={(e) => set("company", e.target.value)} /></Field>
+        </div>
+        <CopyField label="БИН" value={l.bin} />
+        <Field label="Город"><Input value={l.city || ""} disabled={!canEdit} onChange={(e) => set("city", e.target.value)} /></Field>
+        <Field label="Руководитель"><Input value={l.contact} disabled={!canEdit} onChange={(e) => set("contact", e.target.value)} /></Field>
         <Field label="Должность / роль"><Input value={l.title} disabled={!canEdit} onChange={(e) => set("title", e.target.value)} /></Field>
+        <Field label="Размер компании"><Input value={l.employees || ""} disabled={!canEdit} onChange={(e) => set("employees", e.target.value)} /></Field>
         <Field label="Источник"><Select disabled={!canEdit} value={l.source} options={SOURCES} onChange={(e) => set("source", e.target.value)} /></Field>
-        <Field label="Телефон"><Input value={l.phone} disabled={!canEdit} onChange={(e) => set("phone", e.target.value)} /></Field>
-        <Field label="Email"><Input value={l.email} disabled={!canEdit} onChange={(e) => set("email", e.target.value)} /></Field>
         <Field label="Стадия"><Select disabled={!canEdit} value={l.stage} options={SALES_STAGES.map((s) => ({ value: s.id, label: s.title }))} onChange={(e) => set("stage", e.target.value)} /></Field>
         <Field label="Ответственный"><Select disabled={!canEdit} value={l.owner} options={users.filter((u) => u.role === "sales" || u.role === "admin").map((u) => ({ value: u.id, label: u.name }))} onChange={(e) => set("owner", e.target.value)} /></Field>
         <Field label="Дата следующего касания"><Input type="date" value={l.nextTouch || ""} disabled={!canEdit} onChange={(e) => set("nextTouch", e.target.value)} /></Field>
         <Field label="Оценочная сумма сделки, ₸"><Input type="number" value={l.amount} disabled={!canEdit} onChange={(e) => set("amount", +e.target.value)} /></Field>
       </div>
+
+      {/* ----- Каналы связи ----- */}
+      <div style={{ marginTop: 18, marginBottom: 8 }}>
+        <div style={{ fontSize: 14, fontWeight: 800, color: C.text, marginBottom: 12 }}>Каналы связи</div>
+        {!hasAnyChannel && (
+          <div style={{ fontSize: 13, color: C.faint, padding: "10px 0" }}>
+            Контактов пока нет. Заполните телефон, Telegram, LinkedIn, сайт или email — здесь появятся кнопки.
+          </div>
+        )}
+
+        {(phoneDigits || l.whatsapp) && (
+          <ChannelRow icon={<MessageCircle size={18} strokeWidth={1.8} style={{ color: C.blueDark }} />}
+            label="Телефон" value={l.phone || l.whatsapp}
+            actions={<>
+              {phoneDigits && <ChActionBtn onClick={() => open("tel:+" + phoneDigits)}>Позвонить</ChActionBtn>}
+              {waDigits && <ChActionBtn color="#25D366" onClick={() => open("https://wa.me/" + waDigits)}>WhatsApp</ChActionBtn>}
+            </>} />
+        )}
+        {tgUrl && (
+          <ChannelRow icon={<Send size={18} strokeWidth={1.8} style={{ color: "#0088cc" }} />}
+            label="Telegram" value={tgRaw}
+            actions={<ChActionBtn color="#0088cc" onClick={() => open(tgUrl)}>Открыть</ChActionBtn>} />
+        )}
+        {igUrl && (
+          <ChannelRow icon={<Instagram size={18} strokeWidth={1.8} style={{ color: "#E1306C" }} />}
+            label="Instagram" value={igRaw}
+            actions={<ChActionBtn color="#E1306C" onClick={() => open(igUrl)}>Открыть</ChActionBtn>} />
+        )}
+        {liUrl && (
+          <ChannelRow icon={<Linkedin size={18} strokeWidth={1.8} style={{ color: "#0A66C2" }} />}
+            label="LinkedIn — руководитель" value={l.contact || "Профиль"}
+            actions={<ChActionBtn color="#0A66C2" onClick={() => open(liUrl)}>Профиль</ChActionBtn>} />
+        )}
+        {liCompUrl && (
+          <ChannelRow icon={<Linkedin size={18} strokeWidth={1.8} style={{ color: "#0A66C2" }} />}
+            label="LinkedIn — компания" value={l.company || "Страница"}
+            actions={<ChActionBtn color="#0A66C2" onClick={() => open(liCompUrl)}>Страница</ChActionBtn>} />
+        )}
+        {siteUrl && (
+          <ChannelRow icon={<Globe size={18} strokeWidth={1.8} style={{ color: C.muted }} />}
+            label="Сайт" value={l.website}
+            actions={<ChActionBtn onClick={() => open(siteUrl)}>Открыть</ChActionBtn>} />
+        )}
+        {l.email && (
+          <ChannelRow icon={<Mail size={18} strokeWidth={1.8} style={{ color: C.muted }} />}
+            label="Email" value={l.email}
+            actions={<ChActionBtn onClick={() => open("mailto:" + l.email)}>Написать</ChActionBtn>} />
+        )}
+      </div>
+
       <MessageComposer lead={l} value={l.notes} disabled={!canEdit} onChange={(v) => set("notes", v)} />
 
       <div style={{ marginTop: 8 }}>
@@ -1081,6 +1246,8 @@ function LeadDetail({ lead, users, canEdit, onSave, onClose, onConvert }) {
           {(!l.history || !l.history.length) && <div style={{ fontSize: 13, color: C.faint }}>Активностей пока нет.</div>}
         </div>
       </div>
+        </div>{/* конец карточки */}
+      </div>{/* конец grid список+карточка */}
     </Modal>
   );
 }
@@ -1668,10 +1835,22 @@ function CalendarView({ user, tasks, respondents, leads, reminders, onToggleRemi
 
 // ---------- Импорт / Экспорт (3.7) ----------
 const LEAD_FIELDS = [
-  { key: "company", label: "Компания" }, { key: "contact", label: "Контактное лицо" },
-  { key: "title", label: "Должность" }, { key: "phone", label: "Телефон" },
-  { key: "email", label: "Email" }, { key: "source", label: "Источник" },
-  { key: "notes", label: "Заметки" },
+  { key: "company", label: "Компания", syn: ["компания", "company", "организация", "юр.лицо", "клиент"] },
+  { key: "bin", label: "БИН", syn: ["бин", "bin", "иин"] },
+  { key: "city", label: "Город", syn: ["город", "city", "регион"] },
+  { key: "employees", label: "Сотрудников", syn: ["сотрудник", "размер", "штат", "employees", "тип"] },
+  { key: "phone", label: "Телефон", syn: ["телефон", "phone", "тел", "номер"] },
+  { key: "contact", label: "Контактное лицо", syn: ["руководитель", "контакт", "лпр", "contact", "имя", "фио", "директор"] },
+  { key: "title", label: "Должность", syn: ["должность", "роль", "title", "position"] },
+  { key: "linkedin", label: "LinkedIn руковод.", syn: ["linkedin руковод", "linkedin рук", "профиль linkedin", "linkedin лпр"] },
+  { key: "linkedinCompany", label: "LinkedIn компании", syn: ["linkedin компан", "страница linkedin", "linkedin company"] },
+  { key: "whatsapp", label: "WhatsApp", syn: ["whatsapp", "ватсап", "вотсап", "wa"] },
+  { key: "telegram", label: "Telegram", syn: ["telegram", "телеграм", "тг", "tg"] },
+  { key: "instagram", label: "Instagram", syn: ["instagram", "инстаграм", "инста", "ig"] },
+  { key: "website", label: "Сайт", syn: ["сайт", "website", "site", "web", "url", "домен"] },
+  { key: "email", label: "Email / Почта", syn: ["email", "почта", "mail", "e-mail"] },
+  { key: "source", label: "Источник", syn: ["источник", "source", "канал"] },
+  { key: "notes", label: "Заметки / Сообщение", syn: ["заметка", "заметки", "сообщение", "notes", "комментарий", "примечание"] },
 ];
 const RESP_FIELDS = [
   { key: "name", label: "Имя" }, { key: "phone", label: "Телефон" },
@@ -1689,9 +1868,17 @@ function ImportExportModal({ kind, existing, projectId, projects = [], onClose, 
 
   const autoMap = (columns) => {
     const m = {};
+    const used = new Set();
+    const norm = (s) => s.toLowerCase().replace(/[^a-zа-я0-9]/gi, "");
     fields.forEach((f) => {
-      const hit = columns.find((c) => c.toLowerCase().includes(f.label.toLowerCase()) || c.toLowerCase().includes(f.key));
-      if (hit) m[f.key] = hit;
+      const syns = (f.syn || [f.label]).map(norm);
+      // ищем колонку, чьё имя содержит один из синонимов; пропускаем уже занятые
+      const hit = columns.find((c) => {
+        if (used.has(c)) return false;
+        const nc = norm(c);
+        return syns.some((s) => nc.includes(s));
+      });
+      if (hit) { m[f.key] = hit; used.add(hit); }
     });
     return m;
   };
@@ -1730,7 +1917,7 @@ function ImportExportModal({ kind, existing, projectId, projects = [], onClose, 
       title={"Импорт " + (kind === "lead" ? "лидов" : "респондентов")}>
       {!rows && (
         <div style={{ border: "2px dashed " + C.borderStrong, borderRadius: 12, padding: 32, textAlign: "center" }}>
-          <div style={{ fontSize: 30, marginBottom: 8 }}>📥</div>
+          <div style={{ marginBottom: 8, display: "flex", justifyContent: "center" }}><FileText size={30} strokeWidth={1.6} style={{ color: C.muted }} /></div>
           <div style={{ fontWeight: 700, marginBottom: 4 }}>Загрузите CSV или XLSX</div>
           <div style={{ fontSize: 12.5, color: C.faint, marginBottom: 14 }}>Дедупликация по номеру телефона включена автоматически</div>
           <label style={{ display: "inline-block" }}>
@@ -2659,9 +2846,10 @@ function CRMApp({ onSignOut }) {
 
       {/* Модалки */}
       {openLead && (
-        <LeadDetail lead={openLead} users={db.users}
+        <LeadDetail lead={openLead} users={db.users} allLeads={db.leads}
           canEdit={isAdmin || (role === "sales" && (openLead.owner === userId || !db.leads.some((x) => x.id === openLead.id)))}
           onSave={saveLead} onClose={() => setOpenLead(null)}
+          onPick={(l) => setOpenLead(l)}
           onConvert={(l) => { setOpenLead(null); setConvertLead(l); }} />
       )}
       {convertLead && (
