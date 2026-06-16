@@ -904,7 +904,7 @@ function KanbanBoard({ stages, items, getStage, renderCard, onMove, sideStages, 
   return (
     <div>
       {onDelete && (
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap", padding: "12px 14px", marginLeft: "auto", background: C.panel, borderRadius: 12, width: "fit-content" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap", padding: "12px 14px", background: C.panel, borderRadius: 12, width: "fit-content" }}>
           {!selMode ? (
             <Btn variant="soft" onClick={() => setSelMode(true)}>Выбрать</Btn>
           ) : (
