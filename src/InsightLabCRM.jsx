@@ -16,7 +16,7 @@ import {
   BarChart3, Mic, Calendar as CalIcon, TrendingUp, Users as UsersIcon, Settings as SettingsIcon, LayoutDashboard,
   CalendarDays, Bell as BellIcon, Trash2,
   Coffee, FolderOpen, CheckCircle2, FileText, Lightbulb, Clock, Flame,
-  Copy, Send, Mail, MessageCircle, Linkedin, Check, Instagram, Globe,
+  Copy, Send, Mail, MessageCircle, Linkedin, Check, Instagram, Globe, Phone, ArrowUpRight,
 } from "lucide-react";
 import "./nocturne.css";
 
@@ -831,6 +831,7 @@ function KanbanBoard({ stages, items, getStage, renderCard, onMove, sideStages, 
   const allStages = [...stages, ...(sideStages || [])];
   const toggle = (id) => setSel((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const selectAll = () => setSel(new Set(items.map((it) => it.id)));
+  const selectStage = (sid) => setSel((s) => { const n = new Set(s); colItems(sid).forEach((it) => n.add(it.id)); return n; });
   const clearSel = () => { setSel(new Set()); setMoveTo(""); };
   const exitSel = () => { setSelMode(false); clearSel(); };
   const bulkMove = (sid) => { if (!sid) return; sel.forEach((id) => onMove(id, sid)); clearSel(); };
@@ -854,9 +855,18 @@ function KanbanBoard({ stages, items, getStage, renderCard, onMove, sideStages, 
           <span style={{ width: 9, height: 9, borderRadius: 9, background: dc, flexShrink: 0 }} />
           <span style={{ fontSize: 13.5, fontWeight: 700, color: C.text }}>{st.title}</span>
         </div>
-        <span style={{ fontSize: 11.5, fontWeight: 700, color: C.muted, background: "var(--g-col)", borderRadius: 999, padding: "2px 10px", border: "1px solid var(--g-col-border)" }}>
-          {colItems(st.id).length}
-        </span>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          {selMode && colItems(st.id).length > 0 && (
+            <button onClick={() => selectStage(st.id)} title={"Выбрать все в «" + st.title + "»"}
+              style={{ fontSize: 11, fontWeight: 700, color: C.blueDark, background: C.blueLight, border: "none",
+                borderRadius: 7, padding: "3px 9px", cursor: "pointer", fontFamily: FONT }}>
+              Выбрать
+            </button>
+          )}
+          <span style={{ fontSize: 11.5, fontWeight: 700, color: C.muted, background: "var(--g-col)", borderRadius: 999, padding: "2px 10px", border: "1px solid var(--g-col-border)" }}>
+            {colItems(st.id).length}
+          </span>
+        </div>
       </div>
       <div style={{
         minHeight: 46, borderRadius: C.rTile, padding: over === st.id ? 8 : 0,
@@ -871,7 +881,7 @@ function KanbanBoard({ stages, items, getStage, renderCard, onMove, sideStages, 
             <div key={it.id} style={{ position: "relative" }}>
               {card}
               <div onClick={(e) => { e.stopPropagation(); toggle(it.id); }}
-                style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 12, borderRadius: 16, cursor: "pointer",
+                style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 12, borderRadius: 16, cursor: "pointer", zIndex: 5,
                   background: isSel ? "color-mix(in srgb, " + C.blue + " 14%, transparent)" : "transparent",
                   border: "2px solid " + (isSel ? C.blue : "transparent") }}>
                 <span style={{ position: "absolute", top: 10, right: 10, width: 22, height: 22, borderRadius: 6,
@@ -894,9 +904,9 @@ function KanbanBoard({ stages, items, getStage, renderCard, onMove, sideStages, 
   return (
     <div>
       {onDelete && (
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap", padding: "0 6px" }}>
           {!selMode ? (
-            <Btn variant="ghost" size="sm" onClick={() => setSelMode(true)}>Выбрать</Btn>
+            <Btn variant="soft" onClick={() => setSelMode(true)}>Выбрать</Btn>
           ) : (
             <>
               <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Выбрано: {sel.size}</span>
@@ -956,13 +966,9 @@ function MessageComposer({ lead, value, disabled, onChange }) {
 
   const enc = encodeURIComponent(msg);
 
-  // ссылки на каналы
+  // каналы, куда можно подставить ТЕКСТ сообщения (WhatsApp, Почта)
   const waUrl = phoneDigits ? `https://wa.me/${phoneDigits}${text ? `?text=${enc}` : ""}` : null;
-  // Telegram: по username (@…) или по номеру телефона
-  const tgUrl = tg ? `https://t.me/${tg}` : (phoneDigits ? `https://t.me/+${phoneDigits}` : null);
   const mailUrl = lead.email ? `mailto:${lead.email}${text ? `?body=${enc}` : ""}` : null;
-  const liUrl = (lead.source === "LinkedIn" || /linkedin\.com/i.test(lead.email || lead.company || ""))
-    ? "https://www.linkedin.com/" : "https://www.linkedin.com/";
 
   const btn = (active) => ({
     display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 12px",
@@ -1000,52 +1006,46 @@ function MessageComposer({ lead, value, disabled, onChange }) {
           <MessageCircle size={14} strokeWidth={1.8} /> WhatsApp
         </button>
 
-        <button type="button" onClick={() => tgUrl && openWith(tgUrl)} disabled={!tgUrl}
-          title={tgUrl ? "Открыть Telegram (текст в буфере — вставьте)" : "Нет Telegram username"} style={btn(!!tgUrl)}>
-          <Send size={14} strokeWidth={1.8} /> Telegram
-        </button>
-
-        <button type="button" onClick={() => openWith(liUrl)}
-          title="Открыть LinkedIn (текст в буфере — вставьте)" style={btn(true)}>
-          <Linkedin size={14} strokeWidth={1.8} /> LinkedIn
-        </button>
-
         <button type="button" onClick={() => mailUrl && openWith(mailUrl)} disabled={!mailUrl}
           title={mailUrl ? "Открыть письмо (текст подставится)" : "Нет email"} style={btn(!!mailUrl)}>
           <Mail size={14} strokeWidth={1.8} /> Почта
         </button>
       </div>
       <div style={{ fontSize: 11, color: C.faint, marginTop: 7, lineHeight: 1.4 }}>
-        WhatsApp и Почта подставят текст сами. Для Telegram и LinkedIn текст копируется — вставьте в чат (Cmd+V).
+        «Скопировать» — текст в буфер. WhatsApp и Почта подставят текст сами. Остальные каналы — в блоке выше.
       </div>
     </div>
   );
 }
 
-// ---------- Строка канала связи (телефон/telegram/linkedin/…) ----------
-function ChannelRow({ icon, label, value, actions }) {
+// ---------- Строка канала связи (премиум-дизайн) ----------
+function ChannelRow({ iconBg, icon, label, value, sub, actions }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", background: C.panel, borderRadius: 12, marginBottom: 8 }}>
-      <div style={{ width: 40, height: 40, borderRadius: 10, background: C.surface, display: "grid", placeItems: "center", flexShrink: 0, border: "1px solid " + C.border }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 16px", background: C.surface, borderRadius: 16, marginBottom: 10, border: "1px solid " + C.border, boxShadow: "0 1px 3px rgba(16,24,40,0.04)" }}>
+      <div style={{ width: 48, height: 48, borderRadius: 13, background: iconBg || C.panel, display: "grid", placeItems: "center", flexShrink: 0 }}>
         {icon}
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 10.5, fontWeight: 700, color: C.faint, letterSpacing: 0.4, textTransform: "uppercase" }}>{label}</div>
-        <div style={{ fontSize: 13.5, color: C.text, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{value}</div>
+        <div style={{ fontSize: 11, fontWeight: 700, color: C.faint, letterSpacing: 0.6, textTransform: "uppercase", marginBottom: 2 }}>{label}</div>
+        <div style={{ fontSize: 15, color: C.text, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{value}</div>
+        {sub && <div style={{ fontSize: 12, color: C.faint, marginTop: 1 }}>{sub}</div>}
       </div>
       <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>{actions}</div>
     </div>
   );
 }
 
-// маленькая кнопка-действие канала
-function ChActionBtn({ onClick, color, children }) {
+// крупная кнопка-действие канала (с опциональной стрелкой ↗)
+function ChActionBtn({ onClick, color, light, arrow, children }) {
+  const filled = !!color;
   return (
     <button type="button" onClick={onClick} style={{
-      display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 13px", borderRadius: 9,
-      border: "1px solid " + (color || C.border), background: color || C.surface,
-      color: color ? "#fff" : C.text, cursor: "pointer", fontWeight: 600, fontSize: 12.5, fontFamily: FONT, whiteSpace: "nowrap",
-    }}>{children}</button>
+      display: "inline-flex", alignItems: "center", gap: 7, padding: "11px 18px", borderRadius: 12,
+      border: filled ? "none" : "1px solid " + C.borderStrong,
+      background: filled ? color : C.surface,
+      color: filled ? "#fff" : C.text, cursor: "pointer", fontWeight: 700, fontSize: 14, fontFamily: FONT, whiteSpace: "nowrap",
+      boxShadow: filled ? "0 1px 2px rgba(16,24,40,0.18)" : "none",
+    }}>{children}{arrow && <ArrowUpRight size={15} strokeWidth={2.2} />}</button>
   );
 }
 
@@ -1105,6 +1105,10 @@ function LeadDetail({ lead, users, allLeads = [], canEdit, onSave, onClose, onCo
   const open = (u) => u && window.open(u, "_blank", "noopener,noreferrer");
 
   const hasAnyChannel = phoneDigits || l.whatsapp || tgUrl || igUrl || liUrl || liCompUrl || siteUrl || l.email;
+
+  // список номеров (телефон + whatsapp, если разные) и счётчик каналов
+  const phoneList = [...new Set([l.phone, l.whatsapp].map((x) => (x || "").trim()).filter(Boolean))];
+  const channelCount = [(phoneDigits || waDigits), tgUrl, igUrl, liUrl, liCompUrl, siteUrl, l.email].filter(Boolean).length;
 
   // лиды той же стадии, что и открытый (для списка слева)
   const sameStage = allLeads.filter((x) => x.stage === lead.stage);
@@ -1172,50 +1176,53 @@ function LeadDetail({ lead, users, allLeads = [], canEdit, onSave, onClose, onCo
         <Field label="Оценочная сумма сделки, ₸"><Input type="number" value={l.amount} disabled={!canEdit} onChange={(e) => set("amount", +e.target.value)} /></Field>
       </div>
 
-      {/* ----- Каналы связи ----- */}
-      <div style={{ marginTop: 18, marginBottom: 8 }}>
-        <div style={{ fontSize: 14, fontWeight: 800, color: C.text, marginBottom: 12 }}>Каналы связи</div>
+      {/* ----- Каналы связи (премиум) ----- */}
+      <div style={{ marginTop: 22, marginBottom: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 14 }}>
+          <span style={{ fontSize: 16, fontWeight: 800, color: C.text }}>Каналы связи</span>
+          {channelCount > 0 && <Badge color={C.blueDark} bg={C.blueLight}>{channelCount}</Badge>}
+        </div>
         {!hasAnyChannel && (
           <div style={{ fontSize: 13, color: C.faint, padding: "10px 0" }}>
             Контактов пока нет. Заполните телефон, Telegram, LinkedIn, сайт или email — здесь появятся кнопки.
           </div>
         )}
 
-        {(phoneDigits || l.whatsapp) && (
-          <ChannelRow icon={<MessageCircle size={18} strokeWidth={1.8} style={{ color: C.blueDark }} />}
-            label="Телефон" value={l.phone || l.whatsapp}
+        {(phoneDigits || waDigits) && (
+          <ChannelRow iconBg="#EEF0FF" icon={<Phone size={20} strokeWidth={2} style={{ color: "#5B6CFF" }} />}
+            label="Телефон" value={phoneList.join(" · ")} sub={phoneList.length > 1 ? phoneList.length + " номера" : null}
             actions={<>
-              {phoneDigits && <ChActionBtn onClick={() => open("tel:+" + phoneDigits)}>Позвонить</ChActionBtn>}
-              {waDigits && <ChActionBtn color="#25D366" onClick={() => open("https://wa.me/" + waDigits)}>WhatsApp</ChActionBtn>}
+              {phoneDigits && <ChActionBtn onClick={() => open("tel:+" + phoneDigits)}><Phone size={15} strokeWidth={2.2} /> Позвонить</ChActionBtn>}
+              {waDigits && <ChActionBtn color="#25D366" onClick={() => open("https://wa.me/" + waDigits)}><MessageCircle size={15} strokeWidth={2.2} /> WhatsApp</ChActionBtn>}
             </>} />
         )}
         {tgUrl && (
-          <ChannelRow icon={<Send size={18} strokeWidth={1.8} style={{ color: "#0088cc" }} />}
+          <ChannelRow iconBg="#E3F2FB" icon={<Send size={20} strokeWidth={2} style={{ color: "#0088cc" }} />}
             label="Telegram" value={tgRaw}
-            actions={<ChActionBtn color="#0088cc" onClick={() => open(tgUrl)}>Открыть</ChActionBtn>} />
+            actions={<ChActionBtn color="#0088cc" arrow onClick={() => open(tgUrl)}>Открыть</ChActionBtn>} />
         )}
         {igUrl && (
-          <ChannelRow icon={<Instagram size={18} strokeWidth={1.8} style={{ color: "#E1306C" }} />}
+          <ChannelRow iconBg="linear-gradient(135deg,#F58529,#DD2A7B,#8134AF)" icon={<Instagram size={20} strokeWidth={2} style={{ color: "#fff" }} />}
             label="Instagram" value={igRaw}
-            actions={<ChActionBtn color="#E1306C" onClick={() => open(igUrl)}>Открыть</ChActionBtn>} />
+            actions={<ChActionBtn color="#E1306C" arrow onClick={() => open(igUrl)}>Открыть</ChActionBtn>} />
         )}
         {liUrl && (
-          <ChannelRow icon={<Linkedin size={18} strokeWidth={1.8} style={{ color: "#0A66C2" }} />}
+          <ChannelRow iconBg="#E5F0FB" icon={<Linkedin size={20} strokeWidth={2} style={{ color: "#0A66C2" }} />}
             label="LinkedIn — руководитель" value={l.contact || "Профиль"}
-            actions={<ChActionBtn color="#0A66C2" onClick={() => open(liUrl)}>Профиль</ChActionBtn>} />
+            actions={<ChActionBtn color="#0A66C2" arrow onClick={() => open(liUrl)}>Профиль</ChActionBtn>} />
         )}
         {liCompUrl && (
-          <ChannelRow icon={<Linkedin size={18} strokeWidth={1.8} style={{ color: "#0A66C2" }} />}
+          <ChannelRow iconBg="#E5F0FB" icon={<Linkedin size={20} strokeWidth={2} style={{ color: "#0A66C2" }} />}
             label="LinkedIn — компания" value={l.company || "Страница"}
-            actions={<ChActionBtn color="#0A66C2" onClick={() => open(liCompUrl)}>Страница</ChActionBtn>} />
+            actions={<ChActionBtn color="#0A66C2" arrow onClick={() => open(liCompUrl)}>Страница</ChActionBtn>} />
         )}
         {siteUrl && (
-          <ChannelRow icon={<Globe size={18} strokeWidth={1.8} style={{ color: C.muted }} />}
+          <ChannelRow iconBg="#EEF1F4" icon={<Globe size={20} strokeWidth={2} style={{ color: "#475467" }} />}
             label="Сайт" value={l.website}
-            actions={<ChActionBtn onClick={() => open(siteUrl)}>Открыть</ChActionBtn>} />
+            actions={<ChActionBtn color="#1D2939" arrow onClick={() => open(siteUrl)}>Открыть</ChActionBtn>} />
         )}
         {l.email && (
-          <ChannelRow icon={<Mail size={18} strokeWidth={1.8} style={{ color: C.muted }} />}
+          <ChannelRow iconBg="#EEF1F4" icon={<Mail size={20} strokeWidth={2} style={{ color: "#475467" }} />}
             label="Email" value={l.email}
             actions={<ChActionBtn onClick={() => open("mailto:" + l.email)}>Написать</ChActionBtn>} />
         )}
@@ -2657,6 +2664,10 @@ function CRMApp({ onSignOut }) {
         id: uid("lead"), company: it.company || "—", contact: it.contact || "", title: it.title || "",
         phone: it.phone || "", email: it.email || "", source: SOURCES.includes(it.source) ? it.source : "Робот",
         stage: "new", owner: userId, nextTouch: todayISO(), amount: 0, notes: it.notes || "", history: [],
+        bin: it.bin || "", city: it.city || "", employees: it.employees || "",
+        linkedin: it.linkedin || "", linkedinCompany: it.linkedinCompany || "",
+        whatsapp: it.whatsapp || "", telegram: it.telegram || "",
+        instagram: it.instagram || "", website: it.website || "",
       }))] });
     } else {
       const pid = projId || importKind.projectId;
