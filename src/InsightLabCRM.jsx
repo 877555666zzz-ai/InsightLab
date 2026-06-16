@@ -904,9 +904,9 @@ function KanbanBoard({ stages, items, getStage, renderCard, onMove, sideStages, 
   return (
     <div>
       {onDelete && (
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap", padding: "12px 14px", background: C.panel, borderRadius: 12, width: "fit-content" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4, flexWrap: "wrap", padding: "0 6px" }}>
           {!selMode ? (
-            <Btn variant="soft" onClick={() => setSelMode(true)}>Выбрать</Btn>
+            <Btn variant="ghost" size="sm" onClick={() => setSelMode(true)}>Выбрать</Btn>
           ) : (
             <>
               <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Выбрано: {sel.size}</span>
@@ -1845,7 +1845,7 @@ const LEAD_FIELDS = [
   { key: "company", label: "Компания", syn: ["компания", "company", "организация", "юр.лицо", "клиент"] },
   { key: "bin", label: "БИН", syn: ["бин", "bin", "иин"] },
   { key: "city", label: "Город", syn: ["город", "city", "регион"] },
-  { key: "employees", label: "Сотрудников", syn: ["сотрудник", "размер", "штат", "employees", "тип"] },
+  { key: "employees", label: "Сотрудников", syn: ["сотрудник", "размер", "штат", "employees"] },
   { key: "phone", label: "Телефон", syn: ["телефон", "phone", "тел", "номер"] },
   { key: "contact", label: "Контактное лицо", syn: ["руководитель", "контакт", "лпр", "contact", "имя", "фио", "директор"] },
   { key: "title", label: "Должность", syn: ["должность", "роль", "title", "position"] },
