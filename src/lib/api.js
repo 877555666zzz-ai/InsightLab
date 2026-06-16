@@ -16,12 +16,20 @@ const fromLead = (r) => ({
   email: r.email, source: r.source, stage: r.stage, owner: r.owner,
   nextTouch: r.next_touch, amount: Number(r.amount) || 0, notes: r.notes || "",
   history: r.history || [],
+  bin: r.bin || "", city: r.city || "", employees: r.employees || "",
+  linkedin: r.linkedin || "", linkedinCompany: r.linkedin_company || "",
+  whatsapp: r.whatsapp || "", telegram: r.telegram || "",
+  instagram: r.instagram || "", website: r.website || "",
 });
 const toLead = (l) => ({
   id: l.id, company: l.company, contact: l.contact, title: l.title, phone: l.phone,
   email: l.email, source: l.source, stage: l.stage, owner: l.owner,
   next_touch: l.nextTouch || null, amount: l.amount || 0, notes: l.notes || "",
   history: l.history || [],
+  bin: l.bin || null, city: l.city || null, employees: l.employees || null,
+  linkedin: l.linkedin || null, linkedin_company: l.linkedinCompany || null,
+  whatsapp: l.whatsapp || null, telegram: l.telegram || null,
+  instagram: l.instagram || null, website: l.website || null,
 });
 
 const fromProject = (r) => ({
